@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { modelRegistry, families } from "./models.js?v=20260723-taxonomy";
+import { modelRegistry, families, setCatalogLocale } from "./models.js?v=20260723-taxonomy-ru";
 import { solveModel, formatMetric } from "./solver.js?v=20260722e";
 
 const $ = (selector) => document.querySelector(selector);
@@ -27,6 +27,7 @@ const state = {
   communicationOpen: false,
   communicationValues: { neutrinoRate: 80, photonRate: 55, energy: 10, rockThickness: 190, reflectivity: 96 }
 };
+setCatalogLocale(localStorage.getItem("qcd-neutrino-language") || "en");
 window.qcdLabState = state;
 
 const canvas = $("#scene");
@@ -1060,6 +1061,12 @@ function selectModel(id) {
   resetCamera(false);
   setStatus("Система готова", false);
 }
+
+window.addEventListener("qcd-language-change", (event) => {
+  setCatalogLocale(event.detail?.locale || "en");
+  renderCatalog();
+  renderInspector();
+});
 
 function familyTitle(family) {
   return ({ ordinary: "ordinary matter", dense: "dense matter", quark: "quark matter", meson: "meson spectroscopy", collider: "collider event lab", strange: "strange matter", hypothetical: "my hypotheses" })[family] || family;

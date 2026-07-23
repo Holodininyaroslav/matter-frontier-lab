@@ -30,7 +30,7 @@
     if(select.value==='en') applyEnglish();
   }
   select.value=localStorage.getItem('qcd-neutrino-language')||'en';
-  select.addEventListener('change',()=>{ localStorage.setItem('qcd-neutrino-language',select.value); localize(); });
+  select.addEventListener('change',()=>{ localStorage.setItem('qcd-neutrino-language',select.value); window.location.reload(); });
   new MutationObserver(localize).observe(document.body,{subtree:true,childList:true,characterData:true});
   localize();
 })();
