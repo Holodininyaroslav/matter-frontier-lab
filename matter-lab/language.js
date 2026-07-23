@@ -15,6 +15,7 @@
     const family={all:t.all,ordinary:t.ordinary,hypothetical:t.hypotheses,dense:t.dense,qgp:t.qgp,meson:t.mesons,collider:t.collider,strange:t.strange};
     document.querySelectorAll('.family-filters button').forEach(b=>set(b,family[b.dataset.family]||b.textContent));
     const model=selected(); const name=englishNames[model?.id];
+    document.querySelectorAll('.model-item').forEach(item=>{ const itemName=englishNames[item.dataset.model]; if(itemName) set(item.querySelector('.model-copy strong'),itemName); });
     if(name) { document.querySelectorAll('.model-item.active .model-copy strong,#inspectorTitle,#sceneTitle').forEach(el=>set(el,name)); set($('#telemetryObject'),model?.composition?.join('') || name); }
     document.querySelectorAll('.model-copy span').forEach(el=>set(el,t.subtitle));
     document.querySelectorAll('.telemetry-bar div span').forEach((el,i)=>set(el,[t.object,t.scale,t.state,'Solver'][i]));
