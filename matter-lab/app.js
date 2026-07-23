@@ -412,6 +412,17 @@ function applyParameterDrivenVisuals() {
     if (role === "flux") object.material.opacity = 0.12 + visual.coupling * 0.58;
     if (role === "condensate") object.material.opacity = 0.16 + visual.coherence * 0.62;
   });
+  if (colliderVisual) {
+    const alpha = clamp(Number(state.values.detectorOpacity ?? 1), 0, 1);
+    colliderVisual.detector.traverse((object) => {
+      if (!object.material) return;
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      materials.forEach((material) => {
+        material.transparent = true;
+        material.opacity = (material.userData.baseOpacity ?? (material.userData.baseOpacity = material.opacity)) * alpha;
+      });
+    });
+  }
   if (state.selected.visual === "hybridMatter") {
     $("#sceneScale").textContent = `quark fraction ${(visual.quarkFraction * 100).toFixed(0)}% · packing ${visual.specimenScale.toFixed(2)}×`;
   } else if (state.selected.visual === "meson") {
@@ -783,6 +794,7 @@ function createCollider(model) {
   tagComponent(vertex, "colliderDetector", { layer: "interaction point" });
   specimen.add(vertex);
   colliderVisual = { detector, leftBeam, rightBeam, vertex, beamA, beamB };
+  applyParameterDrivenVisuals();
 }
 
 function createQuarkMedium(model) {
@@ -978,7 +990,15 @@ function renderInspector() {
       <label for="param-${parameter.key}"><span>${parameter.label}</span><output id="out-${parameter.key}">${formatParameter(value, parameter)}</output></label>
       <input id="param-${parameter.key}" data-param="${parameter.key}" type="range" min="${parameter.min}" max="${parameter.max}" step="${parameter.step}" value="${value}">
     </div>`;
-  }).join("");
+  }).join("") + (model.visual === "collider" ? `
+    <div class="collider-controls">
+      <div class="collider-controls-title">Collider display</div>
+      <label for="detectorOpacity"><span>Detector transparency</span><output id="detectorOpacityOut">${Math.round((state.values.detectorOpacity ?? 1) * 100)}%</output></label>
+      <input id="detectorOpacity" type="range" min="0" max="1" step="0.01" value="${state.values.detectorOpacity ?? 1}">
+      <label for="collisionSpeed"><span>Event speed</span><output id="collisionSpeedOut">${(state.values.collisionSpeed ?? 1).toFixed(2)}×</output></label>
+      <input id="collisionSpeed" type="range" min="0.05" max="2" step="0.05" value="${state.values.collisionSpeed ?? 1}">
+      <button id="colliderPauseBtn" class="solver-btn" type="button">${state.paused ? "Resume event" : "Pause event"}</button>
+    </div>` : "");
   $("#parameterControls").querySelectorAll("[data-param]").forEach((control) => control.addEventListener(control.tagName === "SELECT" ? "change" : "input", () => {
     const parameter = model.parameters.find((item) => item.key === control.dataset.param);
     state.values[control.dataset.param] = parameter.type === "select" ? control.value : Number(control.value);
@@ -995,6 +1015,18 @@ function renderInspector() {
     setStatus(`${parameter.label} · ${response}`, true);
     if (state.interaction) runInteraction();
   }));
+  const detectorOpacity = $("#detectorOpacity");
+  detectorOpacity?.addEventListener("input", () => {
+    state.values.detectorOpacity = Number(detectorOpacity.value);
+    $("#detectorOpacityOut").textContent = `${Math.round(state.values.detectorOpacity * 100)}%`;
+    applyParameterDrivenVisuals();
+  });
+  const collisionSpeed = $("#collisionSpeed");
+  collisionSpeed?.addEventListener("input", () => {
+    state.values.collisionSpeed = Number(collisionSpeed.value);
+    $("#collisionSpeedOut").textContent = `${state.values.collisionSpeed.toFixed(2)}×`;
+  });
+  $("#colliderPauseBtn")?.addEventListener("click", () => $("#pauseBtn").click());
 
   $("#sourceLinks").innerHTML = model.sources.map(([label, url]) => `<a href="${url}" target="_blank" rel="noreferrer"><span>${label}</span><i data-lucide="external-link" aria-hidden="true"></i></a>`).join("");
   window.lucide?.createIcons();
@@ -1306,10 +1338,11 @@ function buildCollisionEffect() {
     geometry.setDrawRange(0, 0);
     const line = new THREE.Line(geometry, material);
     const component = track.type === "photon" ? "photon" : track.type === "muon" ? "muon" : track.type === "electron" ? "electron" : track.type === "positron" ? "positron" : track.type === "neutralHadron" ? "neutralHadron" : "chargedHadron";
-    tagComponent(line, component, { momentum: track.momentum, charge: track.charge, displaced: track.displaced });
+    const eventProduct = track.type === "chargedHadron" ? `outgoing charged-hadron candidate, q=${track.charge > 0 ? "+" : "−"}e` : track.type === "neutralHadron" ? "outgoing neutral-hadron candidate" : track.type === "muon" ? `outgoing ${track.charge > 0 ? "μ+" : "μ−"}` : track.type === "electron" ? "outgoing e−" : track.type === "positron" ? "outgoing e+" : "outgoing photon";
+    tagComponent(line, component, { momentum: track.momentum, charge: track.charge, displaced: track.displaced, eventProduct });
     effects.add(line);
     const marker = makeSphere(track.primary ? .12 : .065, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .92 }), points[0].toArray(), 10);
-    tagComponent(marker, component, { momentum: track.momentum, charge: track.charge });
+    tagComponent(marker, component, { momentum: track.momentum, charge: track.charge, eventProduct });
     marker.visible = false;
     effects.add(marker);
     animated.push({ type: "collisionTrack", object: line, marker, points, delay: index * .012, phase: 0 });
@@ -1344,8 +1377,8 @@ function showComponentInfo(object) {
   if (!info) return;
   state.selectedComponent = object;
   $("#componentType").textContent = info.type;
-  $("#componentTitle").textContent = info.title;
-  $("#componentDescription").textContent = info.description;
+  $("#componentTitle").textContent = object.userData.eventProduct || info.title;
+  $("#componentDescription").textContent = object.userData.eventProduct ? `${info.description} This clicked object is an ${object.userData.eventProduct}; its precise species requires detector identification.` : info.description;
   const facts = $("#componentFacts");
   facts.replaceChildren();
   info.facts.forEach(([label, value]) => {
@@ -1386,7 +1419,7 @@ function pickSceneComponent(event) {
 
 function updateAnimations(time, dt) {
   const visual = state.visual || deriveVisualState();
-  const speed = (state.values.timeScale || state.values.decaySpeed || 1) * visual.motionSpeed;
+  const speed = (state.values.timeScale || state.values.decaySpeed || 1) * visual.motionSpeed * (state.selected.visual === "collider" ? (state.values.collisionSpeed ?? 1) : 1);
   const scaleTarget = new THREE.Vector3(
     visual.specimenScale * visual.lensStretch,
     visual.specimenScale * (1 + (visual.anisotropy - .5) * .12),

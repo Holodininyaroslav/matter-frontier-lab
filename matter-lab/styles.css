@@ -487,3 +487,4 @@ input[type="range"] { width: 100%; height: 4px; margin: 0; accent-color: var(--c
 }
 .communication-link { color:#65e5ff; text-decoration:none; display:grid; place-items:center; font-weight:800; }
 .language-picker select { height:40px; max-width:92px; padding:0 6px; color:var(--text); background:var(--surface-2); border:1px solid var(--line); border-radius:5px; font:inherit; }
+.collider-controls { display:grid; gap:7px; margin-top:14px; padding-top:13px; border-top:1px solid var(--line); }.collider-controls-title { color:var(--cyan); font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }.collider-controls label { display:flex; justify-content:space-between; gap:10px; color:var(--muted); font-size:11px; }.collider-controls output { color:var(--text); font-family:var(--mono); }.collider-controls input { width:100%; accent-color:var(--cyan); }.collider-controls .solver-btn { justify-self:start; margin-top:3px; }
