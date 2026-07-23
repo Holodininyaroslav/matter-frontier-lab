@@ -141,7 +141,11 @@
           <label class="communication-message" for="communicationMessage"><span>Message payload</span><textarea id="communicationMessage" maxlength="96" rows="3" placeholder="Type a message for neutrino modulation"></textarea></label>
           <div class="communication-actions"><button id="communicationSendBtn" class="solver-btn" type="button">Transmit message</button></div>
           <p id="communicationStatus" class="communication-status">Ready to transmit through rock.</p>
-          <div id="communicationInbox" class="communication-inbox" aria-live="polite"></div>
+          <section class="communication-bit-panel" aria-live="polite">
+            <span>Transmission bits</span><code id="communicationTxBits">—</code>
+            <span>Received bits</span><code id="communicationRxBits">—</code>
+            <span>Decoded message</span><b id="communicationDecoded">Waiting for a complete message.</b>
+          </section>
           <div id="communicationControls" class="parameter-controls"></div>
           <div class="metric-row communication-metrics"><div><span>Neutrinos emitted</span><b id="commNuEmitted">0</b></div><div><span>Through rock</span><b id="commNuThrough">0</b></div><div><span>Detected</span><b id="commNuDetected">0</b></div><div><span>Photon reflection</span><b id="commPhotonReflected">0</b></div></div>
         </section>

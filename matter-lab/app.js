@@ -1824,8 +1824,12 @@ function updateCommunicationMetrics() {
   });
   const status = doc.getElementById("commStatus")?.textContent;
   if (status) $("#communicationStatus").textContent = status;
-  const inbox = doc.getElementById("messageInbox");
-  if (inbox) $("#communicationInbox").innerHTML = inbox.innerHTML;
+  const txBits = doc.getElementById("txBits")?.textContent?.trim();
+  const rxBits = doc.getElementById("rxBits")?.textContent?.trim();
+  if (txBits) $("#communicationTxBits").textContent = txBits;
+  if (rxBits) $("#communicationRxBits").textContent = rxBits;
+  const decoded = doc.querySelector("#messageInbox .message-entry b")?.textContent?.trim();
+  $("#communicationDecoded").textContent = decoded || "Waiting for a complete message.";
 }
 
 function renderCommunicationControls() {
