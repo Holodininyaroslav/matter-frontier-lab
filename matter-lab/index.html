@@ -40,6 +40,7 @@
         </div>
       </div>
       <div class="top-actions">
+        <label class="language-picker"><span class="sr-only">Interface language</span><select id="languageSelect" aria-label="Interface language"><option value="en">English</option><option value="ru">Русский</option><option value="he">עברית</option></select></label>
         <a id="communicationLabBtn" class="icon-btn communication-link" href="../neutrino-communication/" hidden title="Open Neutrino Communication Lab" aria-label="Open Neutrino Communication Lab">ν</a>
         <button id="pauseBtn" class="icon-btn" type="button" aria-label="Пауза" data-tooltip="Пауза анимации"><i data-lucide="pause"></i></button>
         <button id="resetViewBtn" class="icon-btn" type="button" aria-label="Сбросить камеру" data-tooltip="Сбросить камеру"><i data-lucide="scan"></i></button>
@@ -153,5 +154,6 @@
   </div>
 
   <script type="module" src="./app.js?v=20260722e"></script>
+  <script src="./language.js"></script>
 </body>
 </html>
