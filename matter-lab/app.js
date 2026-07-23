@@ -774,10 +774,6 @@ function createCollider(model) {
       detector.add(ring);
     }
   });
-  const pipe = new THREE.Mesh(new THREE.CylinderGeometry(.18, .18, 17, 20), new THREE.MeshStandardMaterial({ color: 0x9bb3b9, metalness: .82, roughness: .28 }));
-  pipe.rotation.z = Math.PI / 2;
-  tagComponent(pipe, "colliderDetector", { layer: "beam pipe" });
-  detector.add(pipe);
   specimen.add(detector);
   const beamA = model.id === "colliderWorkbench" ? state.values.beamA : "proton";
   const beamB = model.id === "colliderWorkbench" ? state.values.beamB : "proton";
