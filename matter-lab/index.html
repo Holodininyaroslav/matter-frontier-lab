@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>QCD Matter Lab</title>
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://unpkg.com">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.169.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.169.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
+  <link rel="stylesheet" href="./styles.css?v=20260722e">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"><i data-lucide="atom"></i></span>
+        <div>
+          <strong>QCD MATTER LAB</strong>
+          <span>particles · mesons · dense QCD · collider · hypothetical</span>
+        </div>
+      </div>
+      <div class="top-center">
+        <nav class="workspace-switch" aria-label="Рабочая область">
+          <button id="matterWorkspaceBtn" type="button"><i data-lucide="atom"></i><span>Материя</span></button>
+          <button id="colliderWorkspaceBtn" type="button"><i data-lucide="radio-tower"></i><span>Коллайдер</span></button>
+        </nav>
+        <div class="solver-strip" aria-label="Состояние вычислений">
+          <span id="renderStatus"><i data-lucide="box"></i> WebGL2</span>
+          <span id="solverStatus"><i data-lucide="cpu"></i> browser solver</span>
+          <span id="backendStatus" class="offline"><i data-lucide="server"></i> backend: checking</span>
+        </div>
+      </div>
+      <div class="top-actions">
+        <a id="communicationLabBtn" class="icon-btn communication-link" href="../neutrino-communication/" hidden title="Open Neutrino Communication Lab" aria-label="Open Neutrino Communication Lab">ν</a>
+        <button id="pauseBtn" class="icon-btn" type="button" aria-label="Пауза" data-tooltip="Пауза анимации"><i data-lucide="pause"></i></button>
+        <button id="resetViewBtn" class="icon-btn" type="button" aria-label="Сбросить камеру" data-tooltip="Сбросить камеру"><i data-lucide="scan"></i></button>
+        <button id="fullscreenBtn" class="icon-btn" type="button" aria-label="На весь экран" data-tooltip="На весь экран"><i data-lucide="maximize"></i></button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="catalog-panel" aria-label="Каталог материи">
+        <div class="panel-heading">
+          <div>
+            <span class="eyebrow">MODEL REGISTRY</span>
+            <h1>Материя</h1>
+          </div>
+          <span id="modelCount" class="count">0</span>
+        </div>
+        <label class="search-box">
+          <i data-lucide="search" aria-hidden="true"></i>
+          <span class="sr-only">Найти модель</span>
+          <input id="modelSearch" type="search" placeholder="Найти модель или фазу">
+        </label>
+        <div id="familyFilters" class="family-filters" aria-label="Фильтр семейства"></div>
+        <div id="modelList" class="model-list"></div>
+      </aside>
+
+      <section class="stage-panel" aria-label="Трёхмерная сцена">
+        <canvas id="scene" aria-label="Интерактивная трёхмерная модель выбранной материи"></canvas>
+        <div class="stage-toolbar">
+          <div id="viewModes" class="segmented" aria-label="Режим отображения">
+            <button type="button" data-view="structure" class="active"><i data-lucide="orbit"></i> Структура</button>
+            <button type="button" data-view="interaction"><i data-lucide="zap"></i> Взаимодействие</button>
+            <button type="button" data-view="field"><i data-lucide="waves"></i> Поле</button>
+          </div>
+          <button id="runInteractionBtn" class="primary-action" type="button"><i data-lucide="play"></i><span>Запустить процесс</span></button>
+        </div>
+        <div class="scene-label">
+          <span id="sceneFamily">ORDINARY MATTER</span>
+          <strong id="sceneTitle">Протон</strong>
+          <small id="sceneScale">illustrative scale</small>
+        </div>
+        <div id="interactionStatus" class="interaction-status" aria-live="polite">Система готова</div>
+        <aside id="componentPopover" class="component-popover" aria-live="polite" hidden>
+          <button id="closeComponentPopover" class="component-popover-close" type="button" aria-label="Закрыть описание частицы"><i data-lucide="x"></i></button>
+          <span id="componentType" class="eyebrow">КОМПОНЕНТ</span>
+          <h3 id="componentTitle">Частица</h3>
+          <p id="componentDescription"></p>
+          <dl id="componentFacts" class="component-facts"></dl>
+          <small id="componentCaveat"></small>
+        </aside>
+        <div class="axis-hint" aria-hidden="true">
+          <i data-lucide="mouse-pointer-2"></i>
+          <span>drag: orbit</span>
+          <span>wheel: zoom</span>
+        </div>
+        <div class="telemetry-bar">
+          <div><span>Объект</span><b id="telemetryObject">uud</b></div>
+          <div><span>Масштаб</span><b id="telemetryScale">1 fm</b></div>
+          <div><span>Состояние</span><b id="telemetryState">ground</b></div>
+          <div><span>Solver</span><b id="telemetrySolver">local / 0.0 ms</b></div>
+        </div>
+      </section>
+
+      <aside class="inspector-panel" aria-label="Научный инспектор">
+        <div class="inspector-head">
+          <div>
+            <span class="eyebrow">SELECTED MODEL</span>
+            <h2 id="inspectorTitle">Протон</h2>
+            <p id="inspectorSubtitle">Валентная структура uud</p>
+          </div>
+          <span id="certaintyBadge" class="certainty confirmed">confirmed</span>
+        </div>
+
+        <section class="inspector-section compact-description">
+          <p id="modelDescription"></p>
+          <div class="equation-block">
+            <span>Математическое ядро</span>
+            <code id="modelFormula"></code>
+          </div>
+          <p id="modelApplicability" class="scope-note"></p>
+        </section>
+
+        <section class="inspector-section">
+          <div class="section-title">
+            <h3>Параметры</h3>
+            <button id="resetParamsBtn" class="small-icon-btn" type="button" aria-label="Сбросить параметры" data-tooltip="Сбросить параметры"><i data-lucide="rotate-ccw"></i></button>
+          </div>
+          <div id="parameterControls" class="parameter-controls"></div>
+        </section>
+
+        <section class="inspector-section solver-section">
+          <div class="section-title">
+            <div>
+              <h3>Результат solver</h3>
+              <span id="chartSubtitle">Cornell potential</span>
+            </div>
+            <button id="backendSolveBtn" class="solver-btn" type="button"><i data-lucide="server-cog"></i> backend</button>
+          </div>
+          <canvas id="resultChart" width="620" height="260" aria-label="График результата математической модели"></canvas>
+          <div id="metricRow" class="metric-row"></div>
+        </section>
+
+        <section class="inspector-section source-section">
+          <div class="section-title">
+            <h3>Научные источники</h3>
+            <span class="traceable"><i data-lucide="shield-check"></i> traceable</span>
+          </div>
+          <div id="sourceLinks" class="source-links"></div>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <script type="module" src="./app.js?v=20260722e"></script>
+</body>
+</html>

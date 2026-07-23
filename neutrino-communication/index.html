@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Neutrino Rock Penetration Lab</title>
+  <link rel="icon" href="data:,">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.165.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.165.0/examples/jsm/"
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="./styles.css?v=underground-relay-20260701a">
+</head>
+<body>
+  <div class="project-nav"><a id="portalLink" href="../">← Research Lab</a><label><span id="languageLabel">Language</span><select id="languageSelect" aria-label="Interface language"><option value="en">English</option><option value="ru">Русский</option><option value="he">עברית</option></select></label></div>
+  <canvas id="scene"></canvas>
+
+  <aside class="panel">
+    <header>
+      <h1>Neutrino Rock Penetration Lab</h1>
+      <p>Источник слева, скала в центре, детектор справа. Нейтрино проходят насквозь, фотоны отражаются.</p>
+    </header>
+
+    <section class="controls">
+      <div class="button-row">
+        <button id="pauseBtn">Pause</button>
+        <button id="resetBtn">Reset</button>
+        <button id="burstBtn">Burst</button>
+      </div>
+
+      <label>
+        <span data-label="neutrinoRate">Neutrino rate</span>
+        <b id="neutrinoRateValue">80 / s</b>
+        <input id="neutrinoRate" type="range" min="10" max="220" value="80">
+      </label>
+
+      <label>
+        <span data-label="photonRate">Photon / EM rate</span>
+        <b id="photonRateValue">55 / s</b>
+        <input id="photonRate" type="range" min="5" max="180" value="55">
+      </label>
+
+      <label>
+        <span data-label="energy">Neutrino energy</span>
+        <b id="energyValue">10 GeV</b>
+        <input id="energy" type="range" min="1" max="100" value="10">
+      </label>
+
+      <label>
+        <span data-label="detectorRadius">Detector radius</span>
+        <b id="detectorRadiusValue">32 m</b>
+        <input id="detectorRadius" type="range" min="16" max="58" value="32">
+      </label>
+
+      <label>
+        <span data-label="detectorDepth">Detector thickness</span>
+        <b id="detectorDepthValue">42 m</b>
+        <input id="detectorDepth" type="range" min="12" max="90" value="42">
+      </label>
+
+      <label>
+        <span data-label="rockThickness">Rock thickness</span>
+        <b id="rockThicknessValue">190 m</b>
+        <input id="rockThickness" type="range" min="120" max="320" value="190">
+      </label>
+
+      <label>
+        <span data-label="rockOpacity">Rock opacity</span>
+        <b id="rockOpacityValue">72%</b>
+        <input id="rockOpacity" type="range" min="28" max="94" value="72">
+      </label>
+
+      <label>
+        <span data-label="reflectivity">Photon reflectivity</span>
+        <b id="reflectivityValue">96%</b>
+        <input id="reflectivity" type="range" min="30" max="100" value="96">
+      </label>
+    </section>
+
+    <section class="metrics">
+      <div><span data-metric="nuEmitted">Neutrinos emitted</span><b id="nuEmitted">0</b></div>
+      <div><span data-metric="nuThrough">Through rock</span><b id="nuThrough">0</b></div>
+      <div><span data-metric="nuDetected">Detected</span><b id="nuDetected">0</b></div>
+      <div><span data-metric="photonEmitted">Photons emitted</span><b id="photonEmitted">0</b></div>
+      <div><span data-metric="photonReflected">Photons reflected</span><b id="photonReflected">0</b></div>
+      <div><span data-metric="photonDetected">Photons detected</span><b id="photonDetected">0</b></div>
+      <div><span data-metric="interactionP">Interaction P</span><b id="interactionP">0.000%</b></div>
+    </section>
+
+    <footer>
+      <div><i class="dot neutrino"></i>нейтрино: свободное прохождение через скалу</div>
+      <div><i class="dot photon"></i>фотоны/ЭМ: отражение и блокировка скалой</div>
+      <div><i class="dot hit"></i>редкая вспышка: событие в детекторе</div>
+    </footer>
+  </aside>
+
+  <aside class="detector-card">
+    <h2>Detector parameters</h2>
+    <div class="row"><span>Medium</span><b>water Cherenkov</b></div>
+    <div class="row"><span>Density</span><b>1.0 g/cm³</b></div>
+    <div class="row"><span>Photon channel</span><b>laser sensor</b></div>
+    <div class="row"><span>Nucleon column</span><b id="columnDensity">0</b></div>
+    <div class="row"><span>Cross section</span><b id="crossSection">0</b></div>
+    <div class="row"><span>Rock loss</span><b>0.000%</b></div>
+  </aside>
+
+  <div class="caption source">NEUTRINO SOURCE</div>
+  <div class="caption laser">PHOTON LASER</div>
+  <div class="caption rock">THICK HOLLOW CONVEX ROCK</div>
+  <div class="caption detector">NEUTRINO DETECTOR</div>
+  <div class="caption photon-detector">PHOTON DETECTOR</div>
+
+  <script type="module" src="./app.js?v=underground-relay-20260701a"></script>
+  <script src="./language.js"></script>
+</body>
+</html>
