@@ -119,10 +119,10 @@
 
         <section class="inspector-section compact-description">
           <p id="modelDescription"></p>
-          <div class="equation-block">
+          <button id="formulaExplainBtn" class="equation-block" type="button" aria-haspopup="dialog" title="Open a detailed explanation">
             <span>Математическое ядро</span>
             <code id="modelFormula"></code>
-          </div>
+          </button>
           <p id="modelApplicability" class="scope-note"></p>
         </section>
 
@@ -173,7 +173,18 @@
     </main>
   </div>
 
-  <script type="module" src="./app.js?v=20260723-catalogue"></script>
+  <div id="formulaModal" class="formula-modal" role="dialog" aria-modal="true" aria-labelledby="formulaModalTitle" hidden>
+    <div class="formula-modal-card">
+      <div class="formula-modal-head"><div><span class="eyebrow">МАТЕМАТИЧЕСКОЕ ЯДРО</span><h2 id="formulaModalTitle"></h2></div><button id="formulaModalClose" class="small-icon-btn" type="button" aria-label="Close explanation"><i data-lucide="x"></i></button></div>
+      <p id="formulaModalIntro" class="formula-modal-intro"></p>
+      <section class="formula-modal-equation"><code id="formulaModalEquation"></code></section>
+      <section><h3>Разбор обозначений</h3><dl id="formulaModalTerms" class="formula-terms"></dl></section>
+      <section><h3>Текущие параметры модели</h3><dl id="formulaModalParameters" class="formula-terms"></dl></section>
+      <section><h3>Границы интерпретации</h3><p id="formulaModalLimit" class="scope-note"></p></section>
+    </div>
+  </div>
+
+  <script type="module" src="./app.js?v=20260723-formula-modal"></script>
   <script src="./language.js?v=20260723-catalogue"></script>
 </body>
 </html>

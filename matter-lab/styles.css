@@ -394,9 +394,11 @@ h1, h2, h3, p { margin: 0; }
 
 .inspector-section { padding: 14px 16px; border-bottom: 1px solid var(--line); }
 .compact-description > p { color: #b8cacd; font-size: 11px; line-height: 1.48; }
-.equation-block { margin: 11px 0; padding: 10px; border-left: 2px solid var(--cyan); background: #08141b; }
+.equation-block { width:100%; margin:11px 0; padding:10px; border:0; border-left:2px solid var(--cyan); background:#08141b; text-align:left; cursor:pointer; }
+.equation-block:hover,.equation-block:focus-visible { background:#0b1b24; outline:1px solid var(--cyan); outline-offset:2px; }
 .equation-block span { display: block; margin-bottom: 5px; color: var(--muted); font-size: 9px; text-transform: uppercase; }
 .equation-block code { display: block; overflow-wrap: anywhere; color: #dbf7fa; font: 12px/1.45 "Cascadia Code", Consolas, monospace; }
+.formula-modal[hidden]{display:none!important}.formula-modal{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:28px;background:#02070bdc;backdrop-filter:blur(5px)}.formula-modal-card{width:min(760px,calc(100vw - 42px));max-height:calc(100vh - 56px);overflow:auto;border:1px solid var(--cyan);border-radius:12px;background:#07151e;box-shadow:0 28px 90px #000;padding:22px}.formula-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;border-bottom:1px solid var(--line);padding-bottom:14px}.formula-modal-head h2{font-size:22px;margin-top:5px}.formula-modal-intro{color:#c3d4d7;line-height:1.55}.formula-modal-card section{margin-top:18px}.formula-modal-card h3{font-size:12px;color:var(--cyan);text-transform:uppercase;letter-spacing:.08em}.formula-modal-equation{padding:14px;border-left:3px solid var(--cyan);background:#061018}.formula-modal-equation code{white-space:pre-wrap;overflow-wrap:anywhere;color:#effdff;font:14px/1.65 "Cascadia Code",Consolas,monospace}.formula-terms{display:grid;grid-template-columns:minmax(130px,.35fr) 1fr;gap:8px 14px;margin:10px 0}.formula-terms dt{color:#79dfea;font-family:var(--mono);font-size:12px}.formula-terms dd{margin:0;color:#c4d0d1;font-size:13px;line-height:1.45}@media(max-width:700px){.formula-modal{padding:12px}.formula-modal-card{width:calc(100vw - 24px);max-height:calc(100vh - 24px);padding:16px}.formula-terms{grid-template-columns:1fr}.formula-terms dd{margin-top:-5px}}
 .scope-note { color: #82989d !important; font-size: 10px !important; }
 .section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .section-title h3 { font-size: 12px; }

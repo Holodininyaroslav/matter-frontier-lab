@@ -1074,10 +1074,58 @@ function renderInspector() {
   window.lucide?.createIcons();
 }
 
+function setFormulaTerms(target, terms) {
+  target.replaceChildren();
+  terms.forEach(([symbol, explanation]) => {
+    const dt = document.createElement("dt"); dt.textContent = symbol;
+    const dd = document.createElement("dd"); dd.textContent = explanation;
+    target.append(dt, dd);
+  });
+}
+
+function formulaTermsFor(model) {
+  if (model.id === "neutrinoLens") return [
+    ["H", "Эффективный гамильтониан: оператор, задающий изменение квантового состояния при распространении."],
+    ["H_vac", "Вакуумная часть: осцилляции, которые происходили бы без среды."],
+    ["H_MSW", "Материальный вклад MSW: изменение фаз нейтрино при прохождении через обычную материю."],
+    ["κ ρ a σₓ", "Гипотетический управляемый член модели линзы: κ — сила связи, ρ — плотность, a — анизотропия, σₓ — матрица Паули."],
+    ["η ρ s σᵧ", "Дополнительный спин-зависимый член: η — эффективная связь, s — выбранная поляризация/ориентация, σᵧ — матрица Паули."],
+    ["δ σ_z", "Расстройка уровней: δ задаёт относительное смещение фаз, σ_z различает два базисных состояния."],
+    ["i dψ/dx = Hψ", "Уравнение эволюции вдоль пути x. ψ — двухкомпонентная амплитуда состояния; это аналог уравнения Шрёдингера по координате." ]
+  ];
+  if (model.formula.includes("alpha") || model.formula.includes("α")) return [
+    ["αₛ", "Безразмерная константа сильного взаимодействия; её значение зависит от энергетического масштаба."],
+    ["σ / κ", "Эффективное натяжение цветовой струны или коэффициент конфайнмента в феноменологической модели."],
+    ["r", "Расстояние между степенями свободы в выбранной эффективной модели."],
+    ["Формула", "Запись описывает эффективную модель, а не прямую фотографию внутренней структуры частиц."]
+  ];
+  return [
+    ["Формула", "Математическая запись выбранной феноменологической или теоретической модели."],
+    ["Параметры", "Управляющие величины перечислены ниже с текущими значениями; изменение ползунков пересчитывает локальную демонстрацию."],
+    ["Статус", "Физический статус и границы применимости указаны в основной карточке модели и научных источниках."]
+  ];
+}
+
+function openFormulaModal() {
+  const model = state.selected;
+  $("#formulaModalTitle").textContent = model.title;
+  $("#formulaModalIntro").textContent = model.description;
+  $("#formulaModalEquation").textContent = model.formula;
+  setFormulaTerms($("#formulaModalTerms"), formulaTermsFor(model));
+  const parameters = model.parameters.length ? model.parameters.map((parameter) => [parameter.label, `${state.values[parameter.key]}${parameter.unit ? ` ${parameter.unit}` : ""}`]) : [["Параметры", "Для этой справочной записи интерактивные параметры не заданы."]];
+  setFormulaTerms($("#formulaModalParameters"), parameters);
+  $("#formulaModalLimit").textContent = model.applicability;
+  $("#formulaModal").hidden = false;
+  window.lucide?.createIcons();
+}
+
+function closeFormulaModal() { $("#formulaModal").hidden = true; }
+
 function selectModel(id) {
   const model = modelRegistry.find((item) => item.id === id);
   if (!model) return;
   state.selected = model;
+  closeFormulaModal();
   if (model.id !== "neutrinoLens") $("#communicationPanel").hidden = true;
   initializeValues(model);
   state.interaction = null;
@@ -1813,6 +1861,10 @@ function animate() {
 }
 
 $("#modelSearch").addEventListener("input", (event) => { state.search = event.target.value; renderCatalog(); });
+$("#formulaExplainBtn").addEventListener("click", openFormulaModal);
+$("#formulaModalClose").addEventListener("click", closeFormulaModal);
+$("#formulaModal").addEventListener("click", (event) => { if (event.target === $("#formulaModal")) closeFormulaModal(); });
+window.addEventListener("keydown", (event) => { if (event.key === "Escape" && !$("#formulaModal").hidden) closeFormulaModal(); });
 $("#matterWorkspaceBtn").addEventListener("click", () => { state.family = "all"; state.search = ""; $("#modelSearch").value = ""; selectModel("proton"); });
 $("#colliderWorkspaceBtn").addEventListener("click", () => { state.family = "collider"; state.search = ""; $("#modelSearch").value = ""; selectModel("colliderWorkbench"); });
 const communicationSettings = [
