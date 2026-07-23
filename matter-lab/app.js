@@ -1822,6 +1822,10 @@ function updateCommunicationMetrics() {
     const source = doc.getElementById(from); const target = $("#" + to);
     if (source && target) target.textContent = source.textContent;
   });
+  const status = doc.getElementById("commStatus")?.textContent;
+  if (status) $("#communicationStatus").textContent = status;
+  const inbox = doc.getElementById("messageInbox");
+  if (inbox) $("#communicationInbox").innerHTML = inbox.innerHTML;
 }
 
 function renderCommunicationControls() {
@@ -1857,6 +1861,15 @@ $("#communicationCloseBtn").addEventListener("click", closeCommunication);
 $("#communicationPauseBtn").addEventListener("click", () => communicationDocument()?.getElementById("pauseBtn")?.click());
 $("#communicationBurstBtn").addEventListener("click", () => communicationDocument()?.getElementById("burstBtn")?.click());
 $("#communicationResetBtn").addEventListener("click", () => communicationDocument()?.getElementById("resetBtn")?.click());
+$("#communicationSendBtn").addEventListener("click", () => {
+  const doc = communicationDocument();
+  const message = $("#communicationMessage").value;
+  const input = doc?.getElementById("commInput");
+  if (!input || !message.trim()) return;
+  input.value = message.slice(0, 96);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  doc.getElementById("sendCommBtn")?.click();
+});
 setInterval(updateCommunicationMetrics, 500);
 $("#runInteractionBtn").addEventListener("click", runInteraction);
 $("#backendSolveBtn").addEventListener("click", runBackendSolver);

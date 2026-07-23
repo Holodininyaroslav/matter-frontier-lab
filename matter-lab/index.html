@@ -138,6 +138,10 @@
           <div class="section-title"><div><h3>Neutrino Communication</h3><span id="communicationState">Ready to transmit through rock</span></div><button id="communicationCloseBtn" class="small-icon-btn" type="button" aria-label="Close communication"><i data-lucide="x"></i></button></div>
           <p class="scope-note">An educational comparison of a neutrino beam and an electromagnetic beam crossing rock. The lens is a project hypothesis; the transport view is not a communications device design.</p>
           <div class="communication-actions"><button id="communicationPauseBtn" class="solver-btn" type="button">Pause</button><button id="communicationBurstBtn" class="solver-btn" type="button">Send pulse</button><button id="communicationResetBtn" class="solver-btn" type="button">Reset</button></div>
+          <label class="communication-message" for="communicationMessage"><span>Message payload</span><textarea id="communicationMessage" maxlength="96" rows="3" placeholder="Type a message for neutrino modulation"></textarea></label>
+          <div class="communication-actions"><button id="communicationSendBtn" class="solver-btn" type="button">Transmit message</button></div>
+          <p id="communicationStatus" class="communication-status">Ready to transmit through rock.</p>
+          <div id="communicationInbox" class="communication-inbox" aria-live="polite"></div>
           <div id="communicationControls" class="parameter-controls"></div>
           <div class="metric-row communication-metrics"><div><span>Neutrinos emitted</span><b id="commNuEmitted">0</b></div><div><span>Through rock</span><b id="commNuThrough">0</b></div><div><span>Detected</span><b id="commNuDetected">0</b></div><div><span>Photon reflection</span><b id="commPhotonReflected">0</b></div></div>
         </section>
