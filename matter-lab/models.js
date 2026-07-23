@@ -790,10 +790,10 @@ export const modelRegistry = [
 export const families = [
   ["all", "Все"],
   ["ordinary", "Обычная"],
+  ["hypothetical", "Мои гипотезы"],
   ["dense", "Плотная"],
   ["quark", "QGP"],
   ["meson", "Мезоны"],
   ["collider", "Коллайдер"],
-  ["strange", "Странная"],
-  ["hypothetical", "Гипотезы"]
+  ["strange", "Странная"]
 ];

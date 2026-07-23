@@ -1049,7 +1049,7 @@ function selectModel(id) {
 }
 
 function familyTitle(family) {
-  return ({ ordinary: "ordinary matter", dense: "dense matter", quark: "quark matter", meson: "meson spectroscopy", collider: "collider event lab", strange: "strange matter", hypothetical: "hypothetical extension" })[family] || family;
+  return ({ ordinary: "ordinary matter", dense: "dense matter", quark: "quark matter", meson: "meson spectroscopy", collider: "collider event lab", strange: "strange matter", hypothetical: "my hypotheses" })[family] || family;
 }
 
 function interactionLabel(model) {
