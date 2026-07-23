@@ -938,7 +938,8 @@ function beamLabel(id) {
 
 function renderCatalog() {
   const filters = $("#familyFilters");
-  filters.innerHTML = families.map(([id, label]) => `<button type="button" class="${state.family === id ? "active" : ""}" data-family="${id}">${label}</button>`).join("");
+  const orderedFamilies = [...families.filter(([id]) => id !== "exotic"), families.find(([id]) => id === "exotic")].filter(Boolean);
+  filters.innerHTML = orderedFamilies.map(([id, label]) => `<button type="button" class="${state.family === id ? "active" : ""}" data-family="${id}">${label}</button>`).join("");
   const query = state.search.trim().toLowerCase();
   const visible = modelRegistry.filter((model) => (state.family === "all" || model.family === state.family) && (!query || `${model.title} ${model.subtitle} ${model.description}`.toLowerCase().includes(query)));
   $("#modelCount").textContent = String(visible.length).padStart(2, "0");
