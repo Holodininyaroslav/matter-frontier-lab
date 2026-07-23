@@ -12,7 +12,7 @@
     [['#matterWorkspaceBtn span',t.matter],['#colliderWorkspaceBtn span',t.collider],['.catalog-panel .eyebrow',t.registry],['.inspector-head .eyebrow',t.selected],['#inspectorSubtitle',t.subtitle],['#modelDescription',t.description],['#modelApplicability',t.scope],['#interactionStatus',t.ready],['#runInteractionBtn span',t.run],['#communicationViewBtn span',t.communication],['.communication-panel-head strong',t.communication]].forEach(([s,v]) => set($(s),v));
     [t.structure,t.interaction,t.field,t.communication].forEach((label,i)=>{ const b=document.querySelectorAll('#viewModes button')[i]; if(b) set(b.querySelector('span') || b.lastChild,label); });
     const search=$('#modelSearch'); if(search) search.placeholder=t.search;
-    const family={all:t.all,ordinary:t.ordinary,hypothetical:t.hypotheses,dense:t.dense,qgp:t.qgp,meson:t.mesons,collider:t.collider,strange:t.strange};
+    const family={all:t.all,ordinary:t.ordinary,hypothetical:t.hypotheses,exotic:'Exotic matter',dense:t.dense,qgp:t.qgp,meson:t.mesons,collider:t.collider,strange:t.strange};
     document.querySelectorAll('.family-filters button').forEach(b=>set(b,family[b.dataset.family]||b.textContent));
     const model=selected(); const name=englishNames[model?.id];
     document.querySelectorAll('.model-item').forEach(item=>{ const itemName=englishNames[item.dataset.model]; if(itemName) set(item.querySelector('.model-copy strong'),itemName); });
