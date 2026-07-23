@@ -24,10 +24,26 @@
     document.querySelectorAll('#parameterControls label').forEach(label=>{ const key=label.querySelector('input')?.dataset.param; set(label.querySelector('span'),parameterNames[key]||t.parameter); });
     document.querySelectorAll('.section-title h3').forEach(el=>{ const raw=el.textContent.toLowerCase(); if(raw.includes('solver')||raw.includes('result')) set(el,t.result); else if(raw.includes('source')) set(el,t.sources); else set(el,t.parameters); });
   }
+  function applyRussianCommunication() {
+    [
+      ['#communicationInspector .section-title h3','Нейтринная коммуникация'],
+      ['#communicationState','Готово к передаче через породу'],
+      ['#communicationStatus','Готово к модуляции поляризации в линзе'],
+      ['#communicationInspector .scope-note','Учебное сравнение нейтринного и электромагнитного пучков, проходящих через породу. Линза — гипотеза проекта; это не проект устройства связи.'],
+      ['#communicationPauseBtn','Пауза'], ['#communicationBurstBtn','Послать импульс'], ['#communicationResetBtn','Сброс']
+    ].forEach(([s,v])=>{ if(v) set($(s),v); });
+    const messageLabel=$('#communicationMessage')?.closest('label')?.querySelector('span'); set(messageLabel,'Сообщение');
+    const message=$('#communicationMessage'); if(message) message.placeholder='Введите сообщение для нейтринной модуляции';
+    set($('#communicationSendBtn'),'Передать сообщение');
+    const bitPanel=$('.communication-bit-panel');
+    if(bitPanel){ const labels=bitPanel.querySelectorAll('span'); set(labels[0],'Биты отправки'); set(labels[1],'Полученные биты'); set(labels[2],'Расшифрованное сообщение'); }
+    const decoded=$('#communicationDecoded'); if(decoded && decoded.textContent.includes('Waiting')) set(decoded,'Ожидание полного сообщения.');
+  }
   function localize() {
     document.documentElement.lang=select.value||'en';
     document.documentElement.dir=select.value==='he'?'rtl':'ltr';
     if(select.value==='en') applyEnglish();
+    if(select.value==='ru') applyRussianCommunication();
   }
   select.value=localStorage.getItem('qcd-neutrino-language')||'en';
   select.addEventListener('change',()=>{ localStorage.setItem('qcd-neutrino-language',select.value); window.location.reload(); });

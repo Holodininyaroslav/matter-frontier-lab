@@ -1816,12 +1816,19 @@ $("#modelSearch").addEventListener("input", (event) => { state.search = event.ta
 $("#matterWorkspaceBtn").addEventListener("click", () => { state.family = "all"; state.search = ""; $("#modelSearch").value = ""; selectModel("proton"); });
 $("#colliderWorkspaceBtn").addEventListener("click", () => { state.family = "collider"; state.search = ""; $("#modelSearch").value = ""; selectModel("colliderWorkbench"); });
 const communicationSettings = [
-  ["neutrinoRate", "Neutrino rate", 10, 220, 1, " / s"],
-  ["photonRate", "Photon / EM rate", 5, 180, 1, " / s"],
-  ["energy", "Neutrino energy", 1, 100, 1, " GeV"],
-  ["rockThickness", "Rock thickness", 120, 320, 1, " m"],
-  ["reflectivity", "Photon reflectivity", 30, 100, 1, "%"]
+  ["neutrinoRate", { en: "Neutrino rate", ru: "Поток нейтрино" }, 10, 220, 1, " / s"],
+  ["photonRate", { en: "Photon / EM rate", ru: "Поток фотонов / ЭМ" }, 5, 180, 1, " / s"],
+  ["energy", { en: "Neutrino energy", ru: "Энергия нейтрино" }, 1, 100, 1, " GeV"],
+  ["rockThickness", { en: "Rock thickness", ru: "Толщина породы" }, 120, 320, 1, " m"],
+  ["reflectivity", { en: "Photon reflectivity", ru: "Отражение фотонов" }, 30, 100, 1, "%"]
 ];
+
+const communicationLocale = () => localStorage.getItem("qcd-neutrino-language") || "en";
+const communicationText = (key) => ({
+  waiting: { en: "Waiting for a complete message.", ru: "Ожидание полного сообщения." },
+  ready: { en: "Ready for cavity polarization modulation", ru: "Готово к модуляции поляризации в линзе" },
+  throughRock: { en: "Ready to transmit through rock", ru: "Готово к передаче через породу" }
+}[key]?.[communicationLocale()] || { waiting: "Waiting for a complete message.", ready: "Ready for cavity polarization modulation", throughRock: "Ready to transmit through rock" }[key]);
 
 function communicationDocument() {
   try { return $("#communicationFrame").contentDocument; } catch { return null; }
@@ -1859,18 +1866,18 @@ function updateCommunicationMetrics() {
     if (source && target) target.textContent = source.textContent;
   });
   const status = doc.getElementById("commStatus")?.textContent;
-  if (status) $("#communicationStatus").textContent = status;
+  if (status) $("#communicationStatus").textContent = status === "Ready for cavity polarization modulation" ? communicationText("ready") : status === "Ready to transmit through rock" ? communicationText("throughRock") : status;
   const txBits = doc.getElementById("txBits")?.textContent?.trim();
   const rxBits = doc.getElementById("rxBits")?.textContent?.trim();
   if (txBits) $("#communicationTxBits").textContent = txBits;
   if (rxBits) $("#communicationRxBits").textContent = rxBits;
   const decoded = doc.querySelector("#messageInbox .message-entry b")?.textContent?.trim();
-  $("#communicationDecoded").textContent = decoded || "Waiting for a complete message.";
+  $("#communicationDecoded").textContent = decoded || communicationText("waiting");
 }
 
 function renderCommunicationControls() {
   const host = $("#communicationControls");
-  host.innerHTML = communicationSettings.map(([key, label, min, max, step, unit]) => `<div class="parameter-control"><label for="comm-${key}"><span>${label}</span><output id="comm-out-${key}">${state.communicationValues[key]}${unit}</output></label><input id="comm-${key}" data-comm-param="${key}" type="range" min="${min}" max="${max}" step="${step}" value="${state.communicationValues[key]}"></div>`).join("");
+  host.innerHTML = communicationSettings.map(([key, label, min, max, step, unit]) => `<div class="parameter-control"><label for="comm-${key}"><span>${label[communicationLocale()] || label.en}</span><output id="comm-out-${key}">${state.communicationValues[key]}${unit}</output></label><input id="comm-${key}" data-comm-param="${key}" type="range" min="${min}" max="${max}" step="${step}" value="${state.communicationValues[key]}"></div>`).join("");
   host.querySelectorAll("[data-comm-param]").forEach((control) => control.addEventListener("input", () => {
     const setting = communicationSettings.find(([key]) => key === control.dataset.commParam);
     state.communicationValues[setting[0]] = Number(control.value);
