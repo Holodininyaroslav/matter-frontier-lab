@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { modelRegistry, families } from "./models.js?v=20260722e";
+import { modelRegistry, families } from "./models.js?v=20260723-taxonomy";
 import { solveModel, formatMetric } from "./solver.js?v=20260722e";
 
 const $ = (selector) => document.querySelector(selector);
