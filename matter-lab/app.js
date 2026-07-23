@@ -25,6 +25,7 @@ const state = {
   visual: null,
   selectedComponent: null
 };
+window.qcdLabState = state;
 
 const canvas = $("#scene");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: "high-performance" });
@@ -962,7 +963,9 @@ function renderCatalog() {
 function renderInspector() {
   const model = state.selected;
   const communicationLabBtn = $("#communicationLabBtn");
-  if (communicationLabBtn) communicationLabBtn.hidden = model.id !== "neutrinoLens";
+  if (communicationLabBtn) communicationLabBtn.remove();
+  const communicationViewBtn = $("#communicationViewBtn");
+  if (communicationViewBtn) communicationViewBtn.hidden = model.id !== "neutrinoLens";
   $("#inspectorTitle").textContent = model.title;
   $("#inspectorSubtitle").textContent = model.subtitle;
   $("#modelDescription").textContent = model.description;
@@ -1036,6 +1039,7 @@ function selectModel(id) {
   const model = modelRegistry.find((item) => item.id === id);
   if (!model) return;
   state.selected = model;
+  if (model.id !== "neutrinoLens") $("#communicationPanel").hidden = true;
   initializeValues(model);
   state.interaction = null;
   state.interactionTime = 0;
@@ -1766,6 +1770,14 @@ function animate() {
 $("#modelSearch").addEventListener("input", (event) => { state.search = event.target.value; renderCatalog(); });
 $("#matterWorkspaceBtn").addEventListener("click", () => { state.family = "all"; state.search = ""; $("#modelSearch").value = ""; selectModel("proton"); });
 $("#colliderWorkspaceBtn").addEventListener("click", () => { state.family = "collider"; state.search = ""; $("#modelSearch").value = ""; selectModel("colliderWorkbench"); });
+$("#communicationViewBtn").addEventListener("click", () => {
+  if (state.selected.id !== "neutrinoLens") return;
+  const frame = $("#communicationFrame");
+  if (!frame.src) frame.src = location.pathname.includes("matter-lab") ? "../neutrino-communication/" : "./neutrino-communication/";
+  $("#communicationPanel").hidden = false;
+  window.lucide?.createIcons();
+});
+$("#closeCommunicationBtn").addEventListener("click", () => { $("#communicationPanel").hidden = true; });
 $("#runInteractionBtn").addEventListener("click", runInteraction);
 $("#backendSolveBtn").addEventListener("click", runBackendSolver);
 $("#resetParamsBtn").addEventListener("click", () => { initializeValues(state.selected); renderInspector(); rebuildSpecimen(); runLocalSolver(); applyParameterDrivenVisuals(); });
