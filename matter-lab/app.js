@@ -940,6 +940,31 @@ function renderCatalog() {
   $("#modelList").querySelectorAll("button").forEach((button) => button.addEventListener("click", () => selectModel(button.dataset.model)));
   $("#matterWorkspaceBtn").classList.toggle("active", state.family !== "collider");
   $("#colliderWorkspaceBtn").classList.toggle("active", state.family === "collider");
+  if (!filters.dataset.dragScroll) {
+    let dragging = false;
+    let startX = 0;
+    let startLeft = 0;
+    filters.addEventListener("pointerdown", (event) => {
+      dragging = true;
+      startX = event.clientX;
+      startLeft = filters.scrollLeft;
+      filters.setPointerCapture?.(event.pointerId);
+    });
+    filters.addEventListener("pointermove", (event) => {
+      if (!dragging) return;
+      filters.scrollLeft = startLeft - (event.clientX - startX);
+    });
+    const stopDrag = () => { dragging = false; };
+    filters.addEventListener("pointerup", stopDrag);
+    filters.addEventListener("pointercancel", stopDrag);
+    filters.addEventListener("wheel", (event) => {
+      if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+        filters.scrollLeft += event.deltaY;
+        event.preventDefault();
+      }
+    }, { passive: false });
+    filters.dataset.dragScroll = "true";
+  }
 }
 
 function renderInspector() {

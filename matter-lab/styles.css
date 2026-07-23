@@ -187,10 +187,19 @@ h1, h2, h3, p { margin: 0; }
   gap: 5px;
   padding: 0 12px 10px;
   overflow-x: auto;
-  scrollbar-width: none;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cyan) var(--surface-2);
+  cursor: grab;
 }
-.family-filters::-webkit-scrollbar { display: none; }
+.family-filters:active { cursor: grabbing; }
+.family-filters::-webkit-scrollbar { height: 8px; }
+.family-filters::-webkit-scrollbar-track { background: var(--surface-2); border-radius: 99px; }
+.family-filters::-webkit-scrollbar-thumb { background: var(--cyan); border: 2px solid var(--surface-2); border-radius: 99px; }
 .family-filters button {
+  flex: 0 0 auto;
   min-height: 26px;
   padding: 0 8px;
   border: 1px solid var(--line);
