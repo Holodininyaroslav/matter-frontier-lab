@@ -1797,7 +1797,7 @@ function prepareCommunicationFrame() {
   if (!doc.querySelector("#matter-frontier-embed-style")) {
     const style = doc.createElement("style");
     style.id = "matter-frontier-embed-style";
-    style.textContent = ".project-nav,.panel,.detector-card,.caption{display:none!important}body{overflow:hidden!important}canvas#scene{inset:0!important;width:100%!important;height:100%!important}";
+    style.textContent = ".project-nav,.panel,.detector-card,.caption,.science-note,.comm-panel,.message-card{display:none!important}body{overflow:hidden!important}canvas#scene{inset:0!important;width:100%!important;height:100%!important}";
     doc.head.append(style);
   }
   syncCommunicationToFrame();
