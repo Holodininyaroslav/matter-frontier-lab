@@ -522,14 +522,16 @@ function createBaryon(model) {
   const positions = [new THREE.Vector3(-1.25, -0.7, 0.7), new THREE.Vector3(1.15, -0.45, 0.5), new THREE.Vector3(0, 1.22, -0.6)];
   const chargeMats = [mats.red, mats.green, mats.blue];
   model.composition.forEach((flavor, index) => {
+    const anti = flavor.endsWith("Bar");
+    const baseFlavor = anti ? flavor.slice(0, -3) : flavor;
     const group = new THREE.Group();
-    const sphere = makeSphere(flavor === "s" ? 0.84 : 0.76, flavor === "s" ? mats.strange : chargeMats[index], [0, 0, 0], 32);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry((flavor === "s" ? 0.84 : 0.76) * 1.08, 0.035, 8, 48), chargeMats[index]);
+    const sphere = makeSphere(baseFlavor === "s" ? 0.84 : 0.76, baseFlavor === "s" ? mats.strange : chargeMats[index], [0, 0, 0], 32);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry((baseFlavor === "s" ? 0.84 : 0.76) * 1.08, 0.035, 8, 48), chargeMats[index]);
     ring.rotation.x = Math.PI / 2;
-    const label = labelSprite(flavor, flavor === "s" ? "#ee72d5" : ["#ff655e", "#63df9b", "#6da2ff"][index]);
+    const label = labelSprite(`${baseFlavor}${anti ? "̄" : ""}`, baseFlavor === "s" ? "#ee72d5" : ["#ff655e", "#63df9b", "#6da2ff"][index]);
     label.position.set(0, 0, 0.86);
     group.add(sphere, ring, label);
-    tagComponent(group, flavor === "u" ? "upQuark" : flavor === "d" ? "downQuark" : "strangeQuark", { flavor, index });
+    tagComponent(group, anti ? (baseFlavor === "u" ? "antiUpQuark" : baseFlavor === "d" ? "antiDownQuark" : "antiStrangeQuark") : (baseFlavor === "u" ? "upQuark" : baseFlavor === "d" ? "downQuark" : "strangeQuark"), { flavor, index });
     group.position.copy(positions[index]);
     specimen.add(group);
     primaryParticles.push(group);
@@ -540,6 +542,20 @@ function createBaryon(model) {
     specimen.add(tube);
     fieldObjects.push(tube);
   }
+}
+
+function createLepton(model) {
+  createShell(2.7, 3);
+  const isNeutrino = model.leptonKind === "neutrino";
+  const color = isNeutrino ? 0x54d8ff : model.antiparticle ? 0xff655e : 0x6da2ff;
+  const material = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.42, roughness: 0.25, metalness: 0.08 });
+  const particle = makeSphere(isNeutrino ? 0.55 : 0.82, material, [0, 0, 0], 32);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(isNeutrino ? 0.74 : 1.02, 0.025, 8, 64), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8 }));
+  ring.rotation.x = Math.PI / 2;
+  const label = labelSprite(model.symbol || model.title, isNeutrino ? "#54d8ff" : model.antiparticle ? "#ff9c98" : "#8ab4ff");
+  label.position.set(0, 0, 0.95);
+  const group = new THREE.Group(); group.add(particle, ring, label); specimen.add(group);
+  primaryParticles.push(group); animated.push({ type: "quark", object: group, phase: 0, base: new THREE.Vector3() });
 }
 
 function createAtom(model) {
@@ -894,6 +910,7 @@ function rebuildSpecimen() {
   colliderVisual = null;
   const model = state.selected;
   if (model.visual === "baryon") createBaryon(model);
+  else if (model.visual === "lepton") createLepton(model);
   else if (model.visual === "atom") createAtom(model);
   else if (model.visual === "denseBaryons") createDenseBaryons();
   else if (model.visual === "hybridMatter") createHybridMatter(model);
@@ -938,16 +955,27 @@ function beamLabel(id) {
 
 function renderCatalog() {
   const filters = $("#familyFilters");
-  const orderedFamilies = [...families.filter(([id]) => id !== "exotic"), families.find(([id]) => id === "exotic")].filter(Boolean);
+  const baseFamilies = families.filter(([id]) => !["ordinary", "exotic"].includes(id));
+  const ordinaryFamilies = [["baryon", "Барионы"], ["lepton", "Лептоны"], ["nuclear", "Ядра и атомы"]];
+  const orderedFamilies = [...baseFamilies.slice(0, 1), ...ordinaryFamilies, ...baseFamilies.slice(1), families.find(([id]) => id === "exotic")].filter(Boolean);
   filters.innerHTML = orderedFamilies.map(([id, label]) => `<button type="button" class="${state.family === id ? "active" : ""}" data-family="${id}">${label}</button>`).join("");
   const query = state.search.trim().toLowerCase();
-  const visible = modelRegistry.filter((model) => (state.family === "all" || model.family === state.family) && (!query || `${model.title} ${model.subtitle} ${model.description}`.toLowerCase().includes(query)));
+  const familyMatches = (model) => {
+    if (state.family === "all") return true;
+    if (state.family === "baryon") return model.family === "baryon" || ["proton", "neutron"].includes(model.id);
+    if (state.family === "nuclear") return ["hydrogen", "helium4"].includes(model.id);
+    return model.family === state.family;
+  };
+  const visible = modelRegistry.filter((model) => familyMatches(model) && (!query || `${model.title} ${model.subtitle} ${model.description}`.toLowerCase().includes(query)));
   $("#modelCount").textContent = String(visible.length).padStart(2, "0");
+  const familyLabels = (localStorage.getItem("qcd-neutrino-language") || "en") === "ru"
+    ? { baryon: "БАРИОН", lepton: "ЛЕПТОН", nuclear: "ЯДРО", ordinary: "ОБЫЧНАЯ", exotic: "ЭКЗОТИЧЕСКАЯ" }
+    : { baryon: "BARYON", lepton: "LEPTON", nuclear: "NUCLEUS", ordinary: "ORDINARY", exotic: "EXOTIC" };
   $("#modelList").innerHTML = visible.map((model) => `
     <button type="button" class="model-item ${state.selected.id === model.id ? "active" : ""}" data-model="${model.id}" data-status="${model.status}">
       <span class="model-dot" aria-hidden="true"></span>
       <span class="model-copy"><strong>${model.title}</strong><span>${model.subtitle}</span></span>
-      <span class="model-family">${model.family}</span>
+      <span class="model-family">${familyLabels[model.family] || model.family}</span>
     </button>`).join("");
   filters.querySelectorAll("button").forEach((button) => button.addEventListener("click", () => { state.family = button.dataset.family; renderCatalog(); }));
   $("#modelList").querySelectorAll("button").forEach((button) => button.addEventListener("click", () => selectModel(button.dataset.model)));

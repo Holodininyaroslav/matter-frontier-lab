@@ -899,6 +899,41 @@ export function setCatalogLocale(locale = 'en') {
   });
 }
 
+const standardParticleRegistry = [
+  ['antiproton','baryon','Антипротон','Антибарион ūūd̄','ūūd̄','-1 e',['uBar','uBar','dBar']],
+  ['antineutron','baryon','Антинейтрон','Антибарион ūd̄d̄','ūd̄d̄','0',['uBar','dBar','dBar']],
+  ['electron','lepton','Электрон','Заряженный лептон первого поколения','e⁻','-1 e','charged'],
+  ['positron','lepton','Позитрон','Античастица электрона','e⁺','+1 e','charged',true],
+  ['muon','lepton','Мюон','Заряженный лептон второго поколения','μ⁻','-1 e','charged'],
+  ['antimuon','lepton','Антимюон','Античастица мюона','μ⁺','+1 e','charged',true],
+  ['tau','lepton','Тау-лептон','Заряженный лептон третьего поколения','τ⁻','-1 e','charged'],
+  ['antitau','lepton','Антитау','Античастица тау-лептона','τ⁺','+1 e','charged',true],
+  ['electronNeutrino','lepton','Электронное нейтрино','Нейтрино первого поколения','νₑ','0','neutrino'],
+  ['electronAntineutrino','lepton','Электронное антинейтрино','Античастица электронного нейтрино','ν̄ₑ','0','neutrino',true],
+  ['muonNeutrino','lepton','Мюонное нейтрино','Нейтрино второго поколения','ν_μ','0','neutrino'],
+  ['muonAntineutrino','lepton','Мюонное антинейтрино','Античастица мюонного нейтрино','ν̄_μ','0','neutrino',true],
+  ['tauNeutrino','lepton','Тау-нейтрино','Нейтрино третьего поколения','ν_τ','0','neutrino'],
+  ['tauAntineutrino','lepton','Тау-антинейтрино','Античастица тау-нейтрино','ν̄_τ','0','neutrino',true]
+];
+
+modelRegistry.push(...standardParticleRegistry.map(([id, family, title, subtitle, symbol, charge, kindOrComposition, antiparticle = false]) => {
+  const baryon = Array.isArray(kindOrComposition);
+  return {
+    id, family, title, subtitle, status:'confirmed', statusLabel:'ЭКСПЕРИМЕНТАЛЬНО ПОДТВЕРЖДЕНО',
+    description: baryon
+      ? `${title} — составной антибарион. Его внутренняя цветовая структура в сцене показана схематически.`
+      : `${title} — фундаментальный лептон Стандартной модели. Визуальный размер частицы условен и не является физическим размером.`,
+    formula: baryon ? `Валентный состав: ${symbol}; заряд ${charge}` : `Заряд ${charge}; спин 1/2`,
+    applicability: baryon
+      ? 'Антибарионы наблюдаются в ускорительных экспериментах. Сцена показывает валентный состав, а не пространственную траекторию кварков.'
+      : 'Лептонная идентичность и античастицы экспериментально подтверждены. Нейтринные массы и осцилляции требуют квантового описания, которое не сводится к этой иконке.',
+    visual: baryon ? 'baryon' : 'lepton', composition: baryon ? kindOrComposition : undefined,
+    leptonKind: baryon ? undefined : kindOrComposition, symbol: baryon ? undefined : symbol, antiparticle,
+    interaction: baryon ? 'boson' : kindOrComposition === 'neutrino' ? 'weak' : 'photon', parameters: [],
+    sources:[['PDG: Particle Physics Booklet','https://pdg.lbl.gov/']]
+  };
+}));
+
 export const families = [
   ["exotic", "Exotic matter"],
   ["all", "Все"],
