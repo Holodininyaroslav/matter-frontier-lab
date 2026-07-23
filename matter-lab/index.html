@@ -73,7 +73,7 @@
             <button type="button" data-view="structure" class="active"><i data-lucide="orbit"></i> Структура</button>
             <button type="button" data-view="interaction"><i data-lucide="zap"></i> Взаимодействие</button>
             <button type="button" data-view="field"><i data-lucide="waves"></i> Поле</button>
-            <button id="communicationViewBtn" type="button" hidden><i data-lucide="radio-tower"></i><span>Neutrino Communication</span></button>
+            <button id="communicationViewBtn" class="communication-mode" type="button" hidden><i data-lucide="radio-tower"></i><span>Neutrino Communication</span></button>
           </div>
           <button id="runInteractionBtn" class="primary-action" type="button"><i data-lucide="play"></i><span>Запустить процесс</span></button>
         </div>
@@ -83,8 +83,7 @@
           <small id="sceneScale">illustrative scale</small>
         </div>
         <section id="communicationPanel" class="communication-panel" hidden aria-label="Neutrino Communication">
-          <div class="communication-panel-head"><div><span class="eyebrow">NEUTRINO COMMUNICATION</span><strong>Transmission through rock</strong></div><button id="closeCommunicationBtn" type="button" class="small-icon-btn" aria-label="Close communication view"><i data-lucide="x"></i></button></div>
-          <iframe id="communicationFrame" title="Neutrino Communication Lab" loading="lazy"></iframe>
+          <iframe id="communicationFrame" title="Neutrino Communication visualizer" loading="lazy"></iframe>
         </section>
         <div id="interactionStatus" class="interaction-status" aria-live="polite">System ready</div>
         <aside id="componentPopover" class="component-popover" aria-live="polite" hidden>
@@ -133,6 +132,14 @@
             <button id="resetParamsBtn" class="small-icon-btn" type="button" aria-label="Сбросить параметры" data-tooltip="Сбросить параметры"><i data-lucide="rotate-ccw"></i></button>
           </div>
           <div id="parameterControls" class="parameter-controls"></div>
+        </section>
+
+        <section id="communicationInspector" class="inspector-section communication-inspector" hidden>
+          <div class="section-title"><div><h3>Neutrino Communication</h3><span id="communicationState">Ready to transmit through rock</span></div><button id="communicationCloseBtn" class="small-icon-btn" type="button" aria-label="Close communication"><i data-lucide="x"></i></button></div>
+          <p class="scope-note">An educational comparison of a neutrino beam and an electromagnetic beam crossing rock. The lens is a project hypothesis; the transport view is not a communications device design.</p>
+          <div class="communication-actions"><button id="communicationPauseBtn" class="solver-btn" type="button">Pause</button><button id="communicationBurstBtn" class="solver-btn" type="button">Send pulse</button><button id="communicationResetBtn" class="solver-btn" type="button">Reset</button></div>
+          <div id="communicationControls" class="parameter-controls"></div>
+          <div class="metric-row communication-metrics"><div><span>Neutrinos emitted</span><b id="commNuEmitted">0</b></div><div><span>Through rock</span><b id="commNuThrough">0</b></div><div><span>Detected</span><b id="commNuDetected">0</b></div><div><span>Photon reflection</span><b id="commPhotonReflected">0</b></div></div>
         </section>
 
         <section class="inspector-section solver-section">

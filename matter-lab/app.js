@@ -23,7 +23,9 @@ const state = {
   solverMs: 0,
   backendOnline: false,
   visual: null,
-  selectedComponent: null
+  selectedComponent: null,
+  communicationOpen: false,
+  communicationValues: { neutrinoRate: 80, photonRate: 55, energy: 10, rockThickness: 190, reflectivity: 96 }
 };
 window.qcdLabState = state;
 
@@ -966,6 +968,12 @@ function renderInspector() {
   if (communicationLabBtn) communicationLabBtn.remove();
   const communicationViewBtn = $("#communicationViewBtn");
   if (communicationViewBtn) communicationViewBtn.hidden = model.id !== "neutrinoLens";
+  const communicationInspector = $("#communicationInspector");
+  if (model.id !== "neutrinoLens") {
+    state.communicationOpen = false;
+    $("#communicationPanel").hidden = true;
+  }
+  communicationInspector.hidden = !(model.id === "neutrinoLens" && state.communicationOpen);
   $("#inspectorTitle").textContent = model.title;
   $("#inspectorSubtitle").textContent = model.subtitle;
   $("#modelDescription").textContent = model.description;
@@ -1032,6 +1040,7 @@ function renderInspector() {
   $("#colliderPauseBtn")?.addEventListener("click", () => $("#pauseBtn").click());
 
   $("#sourceLinks").innerHTML = model.sources.map(([label, url]) => `<a href="${url}" target="_blank" rel="noreferrer"><span>${label}</span><i data-lucide="external-link" aria-hidden="true"></i></a>`).join("");
+  if (model.id === "neutrinoLens" && state.communicationOpen) renderCommunicationControls();
   window.lucide?.createIcons();
 }
 
@@ -1770,14 +1779,85 @@ function animate() {
 $("#modelSearch").addEventListener("input", (event) => { state.search = event.target.value; renderCatalog(); });
 $("#matterWorkspaceBtn").addEventListener("click", () => { state.family = "all"; state.search = ""; $("#modelSearch").value = ""; selectModel("proton"); });
 $("#colliderWorkspaceBtn").addEventListener("click", () => { state.family = "collider"; state.search = ""; $("#modelSearch").value = ""; selectModel("colliderWorkbench"); });
-$("#communicationViewBtn").addEventListener("click", () => {
+const communicationSettings = [
+  ["neutrinoRate", "Neutrino rate", 10, 220, 1, " / s"],
+  ["photonRate", "Photon / EM rate", 5, 180, 1, " / s"],
+  ["energy", "Neutrino energy", 1, 100, 1, " GeV"],
+  ["rockThickness", "Rock thickness", 120, 320, 1, " m"],
+  ["reflectivity", "Photon reflectivity", 30, 100, 1, "%"]
+];
+
+function communicationDocument() {
+  try { return $("#communicationFrame").contentDocument; } catch { return null; }
+}
+
+function prepareCommunicationFrame() {
+  const doc = communicationDocument();
+  if (!doc?.head) return;
+  if (!doc.querySelector("#matter-frontier-embed-style")) {
+    const style = doc.createElement("style");
+    style.id = "matter-frontier-embed-style";
+    style.textContent = ".project-nav,.panel,.detector-card,.caption{display:none!important}body{overflow:hidden!important}canvas#scene{inset:0!important;width:100%!important;height:100%!important}";
+    doc.head.append(style);
+  }
+  syncCommunicationToFrame();
+}
+
+function syncCommunicationToFrame() {
+  const doc = communicationDocument();
+  if (!doc) return;
+  for (const [key] of communicationSettings) {
+    const control = doc.getElementById(key);
+    if (!control) continue;
+    control.value = state.communicationValues[key];
+    control.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+}
+
+function updateCommunicationMetrics() {
+  if (!state.communicationOpen) return;
+  const doc = communicationDocument();
+  if (!doc) return;
+  [["nuEmitted","commNuEmitted"],["nuThrough","commNuThrough"],["nuDetected","commNuDetected"],["photonReflected","commPhotonReflected"]].forEach(([from,to]) => {
+    const source = doc.getElementById(from); const target = $("#" + to);
+    if (source && target) target.textContent = source.textContent;
+  });
+}
+
+function renderCommunicationControls() {
+  const host = $("#communicationControls");
+  host.innerHTML = communicationSettings.map(([key, label, min, max, step, unit]) => `<div class="parameter-control"><label for="comm-${key}"><span>${label}</span><output id="comm-out-${key}">${state.communicationValues[key]}${unit}</output></label><input id="comm-${key}" data-comm-param="${key}" type="range" min="${min}" max="${max}" step="${step}" value="${state.communicationValues[key]}"></div>`).join("");
+  host.querySelectorAll("[data-comm-param]").forEach((control) => control.addEventListener("input", () => {
+    const setting = communicationSettings.find(([key]) => key === control.dataset.commParam);
+    state.communicationValues[setting[0]] = Number(control.value);
+    $("#comm-out-" + setting[0]).textContent = `${control.value}${setting[5]}`;
+    syncCommunicationToFrame();
+  }));
+}
+
+function openCommunication() {
   if (state.selected.id !== "neutrinoLens") return;
+  state.communicationOpen = true;
   const frame = $("#communicationFrame");
   if (!frame.src) frame.src = location.pathname.includes("matter-lab") ? "../neutrino-communication/" : "./neutrino-communication/";
   $("#communicationPanel").hidden = false;
-  window.lucide?.createIcons();
-});
-$("#closeCommunicationBtn").addEventListener("click", () => { $("#communicationPanel").hidden = true; });
+  renderInspector();
+  prepareCommunicationFrame();
+}
+
+function closeCommunication() {
+  state.communicationOpen = false;
+  $("#communicationPanel").hidden = true;
+  renderInspector();
+}
+
+$("#communicationFrame").addEventListener("load", prepareCommunicationFrame);
+$("#communicationViewBtn").addEventListener("click", openCommunication);
+$("#communicationCloseBtn").addEventListener("click", closeCommunication);
+$("#communicationPauseBtn").addEventListener("click", () => communicationDocument()?.getElementById("pauseBtn")?.click());
+$("#communicationBurstBtn").addEventListener("click", () => communicationDocument()?.getElementById("burstBtn")?.click());
+$("#communicationResetBtn").addEventListener("click", () => communicationDocument()?.getElementById("resetBtn")?.click());
+setInterval(updateCommunicationMetrics, 500);
 $("#runInteractionBtn").addEventListener("click", runInteraction);
 $("#backendSolveBtn").addEventListener("click", runBackendSolver);
 $("#resetParamsBtn").addEventListener("click", () => { initializeValues(state.selected); renderInspector(); rebuildSpecimen(); runLocalSolver(); applyParameterDrivenVisuals(); });
