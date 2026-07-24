@@ -287,6 +287,10 @@ def add_balanced_soft_tracks(tracks: list[dict[str, Any]], rng: random.Random, p
 COLLIDER_BEAMS: dict[str, dict[str, Any]] = {
     "proton": {"label": "p", "pdg": 2212, "kind": "hadron", "charge": 1},
     "antiproton": {"label": "p̄", "pdg": -2212, "kind": "hadron", "charge": -1},
+    "neutron": {"label": "n", "pdg": 2112, "kind": "hadron", "charge": 0, "conjugate": "antineutron"},
+    "antineutron": {"label": "n̄", "pdg": -2112, "kind": "hadron", "charge": 0, "conjugate": "neutron"},
+    "hyperon": {"label": "Λ", "pdg": 3122, "kind": "hadron", "charge": 0, "conjugate": "antihyperon"},
+    "antihyperon": {"label": "Λ̄", "pdg": -3122, "kind": "hadron", "charge": 0, "conjugate": "hyperon"},
     "pionPlus": {"label": "π⁺", "pdg": 211, "kind": "hadron", "charge": 1},
     "pionMinus": {"label": "π⁻", "pdg": -211, "kind": "hadron", "charge": -1},
     "electron": {"label": "e⁻", "pdg": 11, "kind": "lepton", "charge": -1, "conjugate": "positron"},
@@ -306,7 +310,8 @@ def resolve_workbench(values: dict[str, Any]) -> dict[str, Any]:
     allowed: list[str] = []
     automatic: str | None = None
     if beam_a["kind"] == "hadron" and beam_b["kind"] == "hadron":
-        allowed, automatic = ["softQCD", "hardQCD"], "softQCD"
+        conjugate_pair = beam_a.get("conjugate") == beam_b_id or beam_b.get("conjugate") == beam_a_id or {beam_a_id, beam_b_id} == {"proton", "antiproton"}
+        allowed, automatic = (["annihilation", "softQCD", "hardQCD"], "annihilation") if conjugate_pair else (["softQCD", "hardQCD"], "softQCD")
     elif {beam_a["kind"], beam_b["kind"]} == {"lepton", "hadron"}:
         allowed, automatic = ["dis"], "dis"
     elif {beam_a["kind"], beam_b["kind"]} == {"photon", "hadron"}:
@@ -316,7 +321,7 @@ def resolve_workbench(values: dict[str, Any]) -> dict[str, Any]:
     elif beam_a["kind"] == "lepton" and beam_b["kind"] == "lepton" and beam_a.get("conjugate") == beam_b_id:
         allowed, automatic = ["annihilation"], "annihilation"
     mode = automatic if requested == "auto" or requested not in allowed else requested
-    labels = {"softQCD": "Soft QCD / minimum-bias", "hardQCD": "Hard QCD / dijet", "annihilation": "γ*/Z annihilation", "dis": "deep-inelastic scattering", "photoproduction": "photoproduction", "pairProduction": "γγ pair production"}
+    labels = {"softQCD": "Soft QCD / minimum-bias", "hardQCD": "Hard QCD / dijet", "annihilation": "baryon–antibaryon annihilation → hadrons" if beam_a["kind"] == "hadron" else "γ*/Z annihilation", "dis": "deep-inelastic scattering", "photoproduction": "photoproduction", "pairProduction": "γγ pair production"}
     return {"supported": automatic is not None, "mode": mode, "processLabel": labels.get(mode, "unsupported beam pair"), "beamA": beam_a, "beamB": beam_b, "beamAId": beam_a_id, "beamBId": beam_b_id, "beamPair": f"{beam_a['label']} ↔ {beam_b['label']}", "reason": "" if automatic else "Unsupported by the current fast event generator"}
 
 
@@ -367,6 +372,11 @@ def solve_collision(values: dict[str, Any], model: str, points: int = 120) -> di
         tracks.append(collision_track(kind, charge, phi, theta, mass / 2.0, primary=True))
         tracks.append(collision_track(kind, -charge, phi + math.pi, math.pi - theta, mass / 2.0, primary=True))
         add_balanced_soft_tracks(tracks, rng, 5 if kind == "photon" else 4, 1.2)
+    elif mode == "annihilation" and setup["beamA"]["kind"] == "hadron":
+        add_balanced_soft_tracks(tracks, rng, 8 + rng.randrange(10), max(0.8, beam_energy * 0.7))
+        phi = rng.random() * 2.0 * math.pi
+        tracks.append(collision_track("photon", 0, phi, math.pi / 2.0, max(0.3, beam_energy * 2.0), primary=True))
+        tracks.append(collision_track("neutralHadron", 0, phi + math.pi, math.pi / 2.0, max(0.3, beam_energy * 1.6), primary=True))
     elif mode in {"annihilation", "pairProduction"}:
         phi = rng.random() * 2.0 * math.pi
         theta = 0.38 + rng.random() * (math.pi - 0.76)

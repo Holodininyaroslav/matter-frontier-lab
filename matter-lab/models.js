@@ -790,11 +790,11 @@ export const modelRegistry = [
 // Curated representative models. Each local visual is educational; source links
 // identify the corresponding open scientific code or primary literature.
 modelRegistry.push(
-  { id:'strangeStar', family:'exotic', title:'Strange star', subtitle:'Self-bound u-d-s quark-matter compact object', status:'theoretical', statusLabel:'THEORETICAL MODEL', description:'A compact-star hypothesis in which bulk strange quark matter is self-bound. The display is a qualitative density profile, not a relativistic stellar solution.', formula:'P = -Omega; epsilon/n_B < 930 MeV', applicability:'Strange stars remain hypothetical. This is a parameterized educational comparison with neutron-star matter.', visual:'strangeMatter', interaction:'strong', parameters:[{key:'density',label:'Central density',unit:'n0',min:1,max:15,step:.1,value:6},{key:'bag',label:'Bag constant',unit:'MeV/fm3',min:40,max:110,step:1,value:70}], sources:[['Strange-matter review','https://arxiv.org/abs/astro-ph/0402014'],['CompOSE equation-of-state database','https://compose.obspm.fr/']] },
+  { id:'strangeStar', family:'macro', title:'Strange star', subtitle:'Self-bound u-d-s quark-matter compact object', status:'theoretical', statusLabel:'THEORETICAL MODEL', description:'A compact-star hypothesis in which bulk strange quark matter is self-bound. The display is a qualitative density profile, not a relativistic stellar solution.', formula:'P = -Omega; epsilon/n_B < 930 MeV', applicability:'Strange stars remain hypothetical. This is a parameterized educational comparison with neutron-star matter.', visual:'strangeMatter', interaction:'strong', parameters:[{key:'density',label:'Central density',unit:'n0',min:1,max:15,step:.1,value:6},{key:'bag',label:'Bag constant',unit:'MeV/fm3',min:40,max:110,step:1,value:70}], sources:[['Strange-matter review','https://arxiv.org/abs/astro-ph/0402014'],['CompOSE equation-of-state database','https://compose.obspm.fr/']] },
   { id:'axionField', family:'exotic', title:'Axion dark-matter field', subtitle:'Ultralight scalar-field dark-matter candidate', status:'hypothetical', statusLabel:'UNDETECTED CANDIDATE', description:'An axion or axion-like field can behave as dark matter. This scene visualizes an oscillating scalar amplitude; it does not claim a detection.', formula:'phi_ddot + 3 H phi_dot + m_a^2 phi = 0', applicability:'Axions are motivated candidates but have not been detected. The linked code computes cosmological observables.', visual:'condensateMatter', interaction:'field', parameters:[{key:'axionMass',label:'Axion mass',unit:'eV',min:1e-24,max:1e-20,step:1e-24,value:1e-22},{key:'density',label:'Field density',unit:'rho0',min:.1,max:10,step:.1,value:1}], sources:[['AxionCAMB open source','https://github.com/dgrin1/axionCAMB'],['AxionCAMB physics paper','https://arxiv.org/abs/1410.2896']] },
   { id:'fuzzyDarkMatter', family:'exotic', title:'Fuzzy dark matter', subtitle:'Wave-like ultralight dark-matter halo', status:'hypothetical', statusLabel:'THEORETICAL MODEL', description:'A very light bosonic dark-matter candidate whose de Broglie wavelength can be astrophysically large. The visualization represents interference and a solitonic core.', formula:'i hbar dpsi/dt = -(hbar^2/2m) laplacian psi + m Phi psi', applicability:'This is a Schrödinger-Poisson toy visualization, not a cosmological N-body run.', visual:'condensateMatter', interaction:'field', parameters:[{key:'particleMass',label:'Particle mass',unit:'eV',min:1e-23,max:5e-21,step:1e-23,value:1e-22},{key:'coreRadius',label:'Core radius',unit:'kpc',min:.1,max:5,step:.1,value:1}], sources:[['GADGET-4 open N-body code','https://wwwmpa.mpa-garching.mpg.de/gadget4/'],['Fuzzy-dark-matter review','https://arxiv.org/abs/1705.01837']] },
   { id:'qBall', family:'exotic', title:'Q-ball', subtitle:'Non-topological scalar-field soliton', status:'theoretical', statusLabel:'THEORETICAL MODEL', description:'A localized scalar-field configuration stabilized by a conserved charge Q. The scene is a qualitative radial field profile.', formula:'Phi(r,t) = phi(r) exp(-i omega t); Q = integral j0 d3x', applicability:'Q-balls are theoretical objects. The linked notebook solves the radial Klein-Gordon problem for a chosen potential.', visual:'condensateMatter', interaction:'field', parameters:[{key:'frequency',label:'Field frequency',unit:'m',min:.1,max:.99,step:.01,value:.65},{key:'coupling',label:'Self coupling',min:0,max:2,step:.01,value:.5}], sources:[['Open Q-ball PINN notebook','https://github.com/PedroBritodSa/Physics-Informed-Neural-Network-Project'],['Q-ball review','https://arxiv.org/abs/hep-th/0103183']] },
-  { id:'bosonStar', family:'exotic', title:'Boson star', subtitle:'Self-gravitating scalar-field compact object', status:'theoretical', statusLabel:'THEORETICAL MODEL', description:'A hypothetical compact object supported by a bosonic field. Variants include mini, rotating, self-interacting and axion stars.', formula:'G_mu_nu = 8 pi G T_mu_nu[phi]; (Box - m^2) phi = 0', applicability:'No boson star has been confirmed. A realistic model solves Einstein-Klein-Gordon equations numerically.', visual:'condensateMatter', interaction:'gravity', parameters:[{key:'fieldMass',label:'Boson mass',unit:'eV',min:1e-22,max:1e-10,step:1e-22,value:1e-12},{key:'compactness',label:'Compactness',min:.01,max:.45,step:.01,value:.16}], sources:[['Einstein Toolkit','https://einsteintoolkit.org/'],['Einstein Toolkit paper','https://arxiv.org/abs/1111.3344']] },
+  { id:'bosonStar', family:'macro', title:'Boson star', subtitle:'Self-gravitating scalar-field compact object', status:'theoretical', statusLabel:'THEORETICAL MODEL', description:'A hypothetical compact object supported by a bosonic field. Variants include mini, rotating, self-interacting and axion stars.', formula:'G_mu_nu = 8 pi G T_mu_nu[phi]; (Box - m^2) phi = 0', applicability:'No boson star has been confirmed. A realistic model solves Einstein-Klein-Gordon equations numerically.', visual:'condensateMatter', interaction:'gravity', parameters:[{key:'fieldMass',label:'Boson mass',unit:'eV',min:1e-22,max:1e-10,step:1e-22,value:1e-12},{key:'compactness',label:'Compactness',min:.01,max:.45,step:.01,value:.16}], sources:[['Einstein Toolkit','https://einsteintoolkit.org/'],['Einstein Toolkit paper','https://arxiv.org/abs/1111.3344']] },
   { id:'mirrorMatter', family:'exotic', title:'Mirror matter', subtitle:'Parity-mirrored hidden-sector hypothesis', status:'hypothetical', statusLabel:'SPECULATIVE SECTOR', description:'A hidden sector containing mirror counterparts of Standard-Model particles. The visual is a conceptual two-sector coupling diagram.', formula:'L = L_SM + L_mirror + epsilon F Fprime', applicability:'Mirror matter is a model class, not an observed material. Portal strength is a demonstration parameter.', visual:'hybridMatter', interaction:'portal', parameters:[{key:'mixing',label:'Kinetic mixing',min:0,max:.1,step:.001,value:.01},{key:'sectorDensity',label:'Mirror-sector density',min:0,max:10,step:.1,value:2}], sources:[['Mirror matter review','https://arxiv.org/abs/0804.0622'],['GADGET-4 framework','https://wwwmpa.mpa-garching.mpg.de/gadget4/']] },
   { id:'darkHadron', family:'exotic', title:'Dark hadron sector', subtitle:'Dark-QCD bound-state benchmark', status:'hypothetical', statusLabel:'GENERATOR BENCHMARK', description:'A generic confined hidden sector with dark quarks, dark pions and dark baryons. The local scene is illustrative.', formula:'SU(N)_D confinement; pp -> mediator -> dark shower', applicability:'This model has no experimental confirmation. Masses and portal couplings are benchmark parameters.', visual:'hybridMatter', interaction:'portal', parameters:[{key:'confinement',label:'Dark confinement scale',unit:'GeV',min:.1,max:20,step:.1,value:2},{key:'portal',label:'Portal coupling',min:0,max:1,step:.01,value:.12}], sources:[['PYTHIA 8 hidden-valley documentation','https://pythia.org/latest-manual/HiddenValley.html'],['Hidden-valley phenomenology','https://arxiv.org/abs/0903.0883']] },
   { id:'magneticMonopole', family:'exotic', title:'Magnetic monopole', subtitle:'Magnetically charged particle hypothesis', status:'hypothetical', statusLabel:'UNOBSERVED PARTICLE', description:'A particle carrying magnetic charge. Field lines in this scene represent the monopole ansatz, not detector data.', formula:'div B = 4 pi g delta(r); e g = n hbar c / 2', applicability:'No fundamental magnetic monopole has been observed. Search limits depend on mass and production assumptions.', visual:'multiquark', interaction:'field', parameters:[{key:'magneticCharge',label:'Magnetic charge',unit:'gD',min:1,max:6,step:1,value:1},{key:'mass',label:'Mass scale',unit:'TeV',min:.1,max:10,step:.1,value:2}], sources:[['MoEDAL monopole programme','https://moedal.web.cern.ch/'],['PDG monopole review','https://pdg.lbl.gov/']] },
@@ -890,6 +890,8 @@ export function setCatalogLocale(locale = 'en') {
     const translated = russianExoticCatalog[model.id];
     if (translated) {
       model.title = translated[0]; model.subtitle = translated[1]; model.description = translated[2];
+      if (translated[3]) model.applicability = translated[3];
+      if (translated[4]) model.statusLabel = translated[4];
       model.applicability = model.visual === 'unavailable'
         ? 'Это справочная запись. Локальная визуализация не показана, пока для конкретной системы нет проверяемой научной модели.'
         : model.applicability;
@@ -902,6 +904,7 @@ export function setCatalogLocale(locale = 'en') {
 const standardParticleRegistry = [
   ['antiproton','baryon','Антипротон','Антибарион ūūd̄','ūūd̄','-1 e',['uBar','uBar','dBar']],
   ['antineutron','baryon','Антинейтрон','Антибарион ūd̄d̄','ūd̄d̄','0',['uBar','dBar','dBar']],
+  ['antihyperon','baryon','Анти-лямбда-гиперон','Антибарион ūd̄s̄','ūd̄s̄','0',['uBar','dBar','sBar']],
   ['electron','lepton','Электрон','Заряженный лептон первого поколения','e⁻','-1 e','charged'],
   ['positron','lepton','Позитрон','Античастица электрона','e⁺','+1 e','charged',true],
   ['muon','lepton','Мюон','Заряженный лептон второго поколения','μ⁻','-1 e','charged'],
@@ -934,6 +937,111 @@ modelRegistry.push(...standardParticleRegistry.map(([id, family, title, subtitle
   };
 }));
 
+modelRegistry.push(
+  { id:'sun', family:'macro', title:'Sun', subtitle:'G-type main-sequence star', status:'confirmed', statusLabel:'OBSERVED STAR', description:'A locally rendered solar sphere using the texture from NASA’s downloadable Sun USDZ asset, with a restrained corona for readability.', formula:'L = 4πR²σT_eff⁴', applicability:'Visual representation only; it is not a magnetohydrodynamic solar calculation.', visual:'macro', macroKind:'sun', interaction:'field', parameters:[{key:'temperature',label:'Photosphere temperature',unit:'K',min:3500,max:7500,step:50,value:5772},{key:'activity',label:'Magnetic activity',min:0,max:1,step:.01,value:.42}], sources:[['NASA Sun 3D model (USDZ source texture)','https://science.nasa.gov/learn/heat/resource/sun-3d-model/'],['NASA 3D Resources','https://github.com/nasa/NASA-3D-Resources']] },
+  { id:'jupiter', family:'macro', title:'Jupiter', subtitle:'Gas giant — hydrogen/helium atmosphere', status:'confirmed', statusLabel:'OBSERVED PLANET', description:'NASA glTF model, stored locally in this laboratory with its original mesh and texture.', formula:'v_esc = √(2GM/R);  P(r) = ∫ρg dr', applicability:'Imported visual asset; this is not an atmospheric fluid simulation.', visual:'macro', macroKind:'jupiter', interaction:'field', parameters:[{key:'rotationPeriod',label:'Rotation period',unit:'h',min:7,max:14,step:.1,value:9.9},{key:'bandContrast',label:'Band contrast',min:0,max:1,step:.01,value:.65}], sources:[['NASA Jupiter 3D model (glTF download)','https://science.nasa.gov/resource/jupiter-3d-model/'],['NASA Eyes on the Solar System','https://science.nasa.gov/eyes/']] },
+  { id:'blackHole', family:'macro', title:'Black hole', subtitle:'Educational 3D accretion-disk model', status:'confirmed', statusLabel:'OBSERVED COMPACT OBJECT', description:'A native 3D laboratory model: event horizon, photon ring, layered hot accretion disk, lensed secondary band, and bipolar jets. It replaces the former title-card image.', formula:'r_s = 2GM/c²;  ds² = −(1−r_s/r)c²dt² + (1−r_s/r)⁻¹dr² + r²dΩ²', applicability:'Physics-motivated explanatory rendering, not a general-relativistic ray-tracing or MHD run.', visual:'macro', macroKind:'blackHole', interaction:'gravity', parameters:[{key:'mass',label:'Mass',unit:'M☉',min:3,max:1000000,step:1,value:4300000},{key:'diskRadius',label:'Disk radius',unit:'r_s',min:2,max:14,step:.1,value:6}], sources:[['NASA SVS: Black Hole Accretion Disk Visualization','https://svs.gsfc.nasa.gov/13326/'],['NASA black-hole visualisation context','https://science.nasa.gov/universe/black-holes/supermassive-black-holes/new-nasa-black-hole-visualization-takes-viewers-beyond-the-brink/'],['CC-BY downloadable reference model — Sebastian Sosnowski','https://sketchfab.com/3d-models/black-hole-cfd16738ad2c402b9dc8e38a9c05c8d4']] },
+  { id:'neutronStar', family:'macro', title:'Neutron star', subtitle:'Magnetised compact remnant', status:'confirmed', statusLabel:'OBSERVED COMPACT OBJECT', description:'Procedural representation of a rotating magnetised neutron star with polar emission cones. NASA supplies a data-derived 3D Crab Nebula resource powered by a pulsar.', formula:'M ≈ 1–2 M☉;  R ≈ 10–14 km;  B_p ∝ μ/R³', applicability:'Explanatory pulsar/magnetosphere view, not a numerical general-relativistic MHD solution.', visual:'macro', macroKind:'neutronStar', interaction:'field', parameters:[{key:'spinFrequency',label:'Spin frequency',unit:'Hz',min:.1,max:716,step:.1,value:30},{key:'magneticField',label:'Surface field',unit:'10¹² G',min:.01,max:1000,step:.01,value:1}], sources:[['NASA Crab Nebula 3D resource','https://science.nasa.gov/3d-resources/crab-nebula/'],['NASA NICER neutron-star science','https://science.nasa.gov/mission/nicer/']] }
+);
+
+// These records are appended after the original catalogue snapshot above.
+// Register their English baseline and their complete Russian catalogue labels.
+["sun", "jupiter", "blackHole", "neutronStar"].forEach((id) => {
+  const model = modelRegistry.find((item) => item.id === id);
+  catalogOriginal.set(id, { title: model.title, subtitle: model.subtitle, description: model.description, applicability: model.applicability, statusLabel: model.statusLabel });
+});
+Object.assign(russianExoticCatalog, {
+  sun: ["Солнце", "Звезда главной последовательности класса G", "Локальная сфера Солнца с текстурой из загружаемой USDZ-модели NASA и сдержанной короной для наглядности."],
+  jupiter: ["Юпитер", "Газовый гигант — атмосфера из водорода и гелия", "Локально встроенная glTF-модель NASA с исходной геометрией и текстурой."],
+  blackHole: ["Чёрная дыра", "Учебная 3D-модель аккреционного диска", "Нативная 3D-модель лаборатории: горизонт событий, фотонное кольцо, слоистый горячий аккреционный диск, линзированная вторичная полоса и биполярные джеты. Она заменяет прежнюю картинку-заставку."],
+  neutronStar: ["Нейтронная звезда", "Магнитизированный компактный остаток", "Процедурная модель вращающейся магнитизированной нейтронной звезды с полярными пучками; NASA публикует 3D-ресурс Крабовидной туманности, питаемой пульсаром."]
+});
+
+// Explicitly a project hypothesis. It borrows the language of effective non-Hermitian
+// Hamiltonians, while its 4D geometry and particle interpretation are illustrative.
+modelRegistry.push({
+  id: "complexSpinQuasiparticle",
+  family: "hypothetical",
+  title: "4D complex-spin quasiparticle",
+  subtitle: "PT-symmetric effective non-Hermitian projection",
+  status: "hypothetical",
+  statusLabel: "PROJECT HYPOTHESIS",
+  description: "A hypothetical 4D quasiparticle rendered as its changing 3D slice. The real effective-spin response is drawn as precession; the imaginary response controls gain/loss-like breathing and phase displacement. It is not a claimed elementary particle or a prediction of a new physical state.",
+  formula: "r₃ = √(R₄² − h²);  H_eff = Ω σ_z + iΓ σ_x + κh σ_y",
+  applicability: "Non-Hermitian and PT-symmetric effective Hamiltonians are established tools for open systems. The interpretation as a 4D particle and the geometry shown here are an author-defined, educational hypothesis.",
+  visual: "complexSpin",
+  interaction: "field",
+  parameters: [
+    { key: "configuration", label: "Configuration", type: "select", value: "single", options: [["single", "4D quasiparticle: 3D slice"], ["lattice", "3D M-field region — 100 × 100 × 100 samples (sparse display)"]] },
+    { key: "mMode", label: "Projection preset", type: "select", value: "phase", options: [["phase", "Phase-controlled projection"], ["scalar", "Scalar resonance — spin 0"], ["vector", "Vector resonance — spin 1"], ["tensor", "Tensor resonance — spin 2"], ["mixed", "Mixed projection"]] },
+    { key: "iPhase", label: "i-phase φ", unit: "rad", min: 0, max: 6.283, step: .01, value: 0.52 },
+    { key: "iCoupling", label: "i-coupling strength", min: 0, max: 1, step: .01, value: .72 },
+    { key: "leakage", label: "Leakage Im(s)", min: 0, max: 1, step: .01, value: .18 },
+    { key: "projectionCoherence", label: "Projection coherence", min: 0, max: 1, step: .01, value: .84 },
+    { key: "probeType", label: "3D probe", type: "select", value: "photon", options: [["photon", "Photon — refraction / phase shift"], ["electron", "Electron — deflection"], ["neutrino", "Neutrino — phase delay"], ["atom", "Atom — energy-level shift"]] },
+    { key: "projection", label: "Visible 3D axes", type: "select", value: "xyi", options: [["xyz", "X · Y · Z (hide i)"], ["xyi", "X · Y · i (hide z)"], ["xzi", "X · Z · i (hide y)"], ["yzi", "Y · Z · i (hide x)"]] },
+    { key: "positionX", label: "4D position x", min: -3, max: 3, step: .01, value: 0 },
+    { key: "positionY", label: "4D position y", min: -3, max: 3, step: .01, value: 0 },
+    { key: "positionZ", label: "4D position z", min: -3, max: 3, step: .01, value: 0 },
+    { key: "positionI", label: "4D position i", min: -3, max: 3, step: .01, value: 0 },
+    { key: "precession", label: "Real-spin precession Ω", unit: "rad/s", min: .1, max: 3, step: .05, value: 1.1 },
+    { key: "phaseOffset", label: "Complex phase φ", unit: "rad", min: 0, max: 6.28, step: .01, value: .6 }
+  ],
+  sources: [
+    ["Non-Hermitian Physics — review", "https://arxiv.org/abs/2006.01837"],
+    ["Continuous-spin particles — review", "https://arxiv.org/abs/1708.01030"]
+  ]
+});
+const complexSpinModel = modelRegistry.find((model) => model.id === "complexSpinQuasiparticle");
+catalogOriginal.set(complexSpinModel.id, { title: complexSpinModel.title, subtitle: complexSpinModel.subtitle, description: complexSpinModel.description, applicability: complexSpinModel.applicability, statusLabel: complexSpinModel.statusLabel });
+russianExoticCatalog.complexSpinQuasiparticle = [
+  "4D квазичастица с комплексным спином",
+  "PT-симметричная эффективная неэрмитова проекция",
+  "Гипотетическая 4D-квазичастица, показанная через изменяющийся 3D-срез. Реальная часть эффективного спина отображается прецессией, мнимая — пульсацией, фазовым сдвигом и неэрмитовым откликом. Это не заявленная элементарная частица и не предсказание нового состояния вещества.",
+  "Неэрмитовы и PT-симметричные эффективные гамильтонианы применяются для открытых систем; трактовка объекта как 4D-частицы и его геометрия здесь являются авторской учебной гипотезой.",
+  "АВТОРСКАЯ ГИПОТЕЗА"
+];
+
+// Geometric catalogue entry. The coordinates are rendered natively in the lab;
+// it is an exact mathematical object, not a proposed physical particle.
+modelRegistry.push({
+  id: "tesseract4d",
+  family: "hypothetical",
+  title: "Tesseract (4D hypercube)",
+  subtitle: "Interactive 4D projection and 3D-slice explorer",
+  status: "catalog",
+  statusLabel: "MATHEMATICAL OBJECT",
+  description: "A tesseract is the four-dimensional analogue of a cube. Choose a full 4D perspective projection, or a physical 3D hyperplane slice: in slice mode the drawing disappears exactly when the selected 3D space no longer intersects the tesseract.",
+  formula: "v ∈ {−1,+1}⁴;  32 edges;  R₄D = R_Zi R_Yi R_Xi",
+  applicability: "This is an exact mathematical polytope, not a particle or a physical state of matter. The 3D-slice mode shows the true intersection of the tesseract's square faces with the selected visible space; projection mode is provided separately for geometric intuition.",
+  visual: "polytope4d",
+  interaction: "field",
+  parameters: [
+    { key: "tesseractMode", label: "Display mode", type: "select", value: "slice", options: [["slice", "3D slice — leaves visible space"], ["projection", "4D perspective projection"]] },
+    { key: "projection", label: "Visible 3D axes", type: "select", value: "xyi", options: [["xyz", "X · Y · Z (hide i)"], ["xyi", "X · Y · i (hide z)"], ["xzi", "X · Z · i (hide y)"], ["yzi", "Y · Z · i (hide x)"]] },
+    { key: "positionX", label: "4D position x", min: -1.2, max: 1.2, step: .01, value: 0 },
+    { key: "positionY", label: "4D position y", min: -1.2, max: 1.2, step: .01, value: 0 },
+    { key: "positionZ", label: "4D position z", min: -1.2, max: 1.2, step: .01, value: 0 },
+    { key: "positionI", label: "4D position i", min: -1.2, max: 1.2, step: .01, value: 0 },
+    { key: "rotationXi", label: "4D rotation X–i", unit: "rad", min: -3.14, max: 3.14, step: .01, value: .38 },
+    { key: "rotationYi", label: "4D rotation Y–i", unit: "rad", min: -3.14, max: 3.14, step: .01, value: -.24 },
+    { key: "rotationZi", label: "4D rotation Z–i", unit: "rad", min: -3.14, max: 3.14, step: .01, value: .18 }
+  ],
+  sources: [
+    ["Tesseract Explorer — MIT source", "https://github.com/tsherif/tesseract-explorer"],
+    ["four — 4D renderer and slicing reference (CC BY 4.0)", "https://github.com/mwalczyk/four"]
+  ]
+});
+const tesseractModel = modelRegistry.find((model) => model.id === "tesseract4d");
+catalogOriginal.set(tesseractModel.id, { title: tesseractModel.title, subtitle: tesseractModel.subtitle, description: tesseractModel.description, applicability: tesseractModel.applicability, statusLabel: tesseractModel.statusLabel });
+russianExoticCatalog.tesseract4d = [
+  "Тессеракт (4D-гиперкуб)",
+  "Интерактивная каркасная 4D→3D-проекция",
+  "Тессеракт — четырёхмерный аналог куба. Нативная модель лаборатории проецирует его 16 вершин и 32 ребра в выбранную тройку видимых осей; геометрия пересчитывается при повороте в четырёхмерном пространстве.",
+  "Это точный математический многогранник, а не частица и не состояние вещества. Отображение является учебной перспективной проекцией, вычисленной из 4D-координат.",
+  "МАТЕМАТИЧЕСКИЙ ОБЪЕКТ"
+];
+
 export const families = [
   ["exotic", "Exotic matter"],
   ["all", "Все"],
@@ -943,5 +1051,6 @@ export const families = [
   ["quark", "QGP"],
   ["meson", "Мезоны"],
   ["collider", "Коллайдер"],
-  ["strange", "Странная"]
+  ["strange", "Странная"],
+  ["macro", "Macro objects"]
 ];

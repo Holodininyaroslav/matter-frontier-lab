@@ -1,0 +1,15 @@
+# Notices and attribution
+
+## Original project code
+
+The Matter Frontier Lab source code in this repository is original project code released under the MIT License unless a file states otherwise.
+
+## Third-party code and resources
+
+- **Three.js** is used under its own MIT License. See <https://github.com/mrdoob/three.js>.
+- **NASA visual resources and 3D assets** are used or referenced only where noted in the relevant model card. Their use remains subject to NASA's media-use guidance and any asset-specific provenance information.
+- **PYTHIA 8, HepMC3, Geant4, nuSQuIDS, MUSES, CompOSE, MEEP, Einstein Toolkit, GADGET-4, CosmoLattice and AxionCAMB** are independent projects. They are not copied into or run by this browser application unless a future adapter explicitly says so. Their names, manuals and URLs are referenced for scientific provenance and potential integration.
+
+## Research integrity
+
+The local visualisations and solver are educational approximations. They are not substitutes for external validated simulations, detector reconstruction, numerical-relativity calculations, neutrino-transport calculations or quantum-hardware runs.

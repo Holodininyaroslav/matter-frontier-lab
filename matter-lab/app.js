@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { modelRegistry, families, setCatalogLocale } from "./models.js?v=20260723-taxonomy-ru";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { USDZLoader } from "three/addons/loaders/USDZLoader.js";
+import { modelRegistry, families, setCatalogLocale } from "./models.js?v=20260723-tesseract-slice-modes";
 import { solveModel, formatMetric } from "./solver.js?v=20260722e";
 
 const $ = (selector) => document.querySelector(selector);
@@ -8,6 +10,8 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const rand = (min, max) => min + Math.random() * (max - min);
 const clock = new THREE.Clock();
+const gltfLoader = new GLTFLoader();
+const usdzLoader = new USDZLoader();
 
 const state = {
   selected: modelRegistry[0],
@@ -19,11 +23,14 @@ const state = {
   interaction: null,
   interactionTime: 0,
   interactionPhase: null,
+  collisionContext: null,
   solverResult: null,
   solverMs: 0,
   backendOnline: false,
   visual: null,
   selectedComponent: null,
+  confinementChoice: 0,
+  confinementPulled: false,
   communicationOpen: false,
   communicationValues: { neutrinoRate: 80, photonRate: 55, energy: 10, rockThickness: 190, reflectivity: 96 }
 };
@@ -128,6 +135,132 @@ let primaryParticles = [];
 let fieldObjects = [];
 let mesonVisual = null;
 let colliderVisual = null;
+const BARYON_PARTNERS = { proton: "antiproton", antiproton: "proton", neutron: "antineutron", antineutron: "neutron", hyperon: "antihyperon", antihyperon: "hyperon" };
+const BARYON_BEAMS = {
+  proton: ["p · proton", ["u", "u", "d"]], antiproton: ["p̄ · antiproton", ["uBar", "uBar", "dBar"]],
+  neutron: ["n · neutron", ["u", "d", "d"]], antineutron: ["n̄ · antineutron", ["uBar", "dBar", "dBar"]],
+  hyperon: ["Λ · lambda hyperon", ["u", "d", "s"]], antihyperon: ["Λ̄ · anti-lambda", ["uBar", "dBar", "sBar"]]
+};
+const isBaryonModel = (model) => model?.visual === "baryon" && Boolean(BARYON_PARTNERS[model.id]);
+const HYPERSPHERE_RADIUS = 1.2;
+const HYPER_PROJECTIONS = {
+  xyz: { axes: ["x", "y", "z"], hidden: "i" },
+  xyi: { axes: ["x", "y", "i"], hidden: "z" },
+  xzi: { axes: ["x", "z", "i"], hidden: "y" },
+  yzi: { axes: ["y", "z", "i"], hidden: "x" }
+};
+const TESSERACT_VERTICES = Array.from({ length: 16 }, (_, index) => [
+  index & 1 ? 1 : -1,
+  index & 2 ? 1 : -1,
+  index & 4 ? 1 : -1,
+  index & 8 ? 1 : -1
+]);
+const TESSERACT_EDGES = TESSERACT_VERTICES.flatMap((_, vertex) => [0, 1, 2, 3]
+  .filter((axis) => vertex < (vertex ^ (1 << axis)))
+  .map((axis) => [vertex, vertex ^ (1 << axis)]));
+const TESSERACT_FACES = [];
+for (let first = 0; first < 4; first += 1) {
+  for (let second = first + 1; second < 4; second += 1) {
+    const fixedAxes = [0, 1, 2, 3].filter((axis) => axis !== first && axis !== second);
+    for (let fixed = 0; fixed < 4; fixed += 1) {
+      let base = 0;
+      if (fixed & 1) base |= 1 << fixedAxes[0];
+      if (fixed & 2) base |= 1 << fixedAxes[1];
+      TESSERACT_FACES.push([base, base ^ (1 << first), base ^ (1 << first) ^ (1 << second), base ^ (1 << second)]);
+    }
+  }
+}
+
+function rotateFourPlane(point, first, second, angle) {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const rotated = [...point];
+  rotated[first] = point[first] * cos - point[second] * sin;
+  rotated[second] = point[first] * sin + point[second] * cos;
+  return rotated;
+}
+
+function transformTesseractVertex(vertex) {
+  const translated = [
+    vertex[0] + (state.values.positionX ?? 0),
+    vertex[1] + (state.values.positionY ?? 0),
+    vertex[2] + (state.values.positionZ ?? 0),
+    vertex[3] + (state.values.positionI ?? 0)
+  ];
+  let rotated = rotateFourPlane(translated, 0, 3, state.values.rotationXi ?? 0);
+  rotated = rotateFourPlane(rotated, 1, 3, state.values.rotationYi ?? 0);
+  return rotateFourPlane(rotated, 2, 3, state.values.rotationZi ?? 0);
+}
+
+function projectTesseractVertex(vertex) {
+  const rotated = transformTesseractVertex(vertex);
+  const projection = HYPER_PROJECTIONS[state.values.projection] || HYPER_PROJECTIONS.xyi;
+  const coordinate = { x: rotated[0], y: rotated[1], z: rotated[2], i: rotated[3] };
+  const perspective = 3.9 / Math.max(.5, 5.2 - coordinate[projection.hidden]);
+  return projection.axes.map((axis) => coordinate[axis] * perspective * 1.4);
+}
+
+function tesseractSliceSegments() {
+  const projection = HYPER_PROJECTIONS[state.values.projection] || HYPER_PROJECTIONS.xyi;
+  const axisIndex = { x: 0, y: 1, z: 2, i: 3 };
+  const hiddenIndex = axisIndex[projection.hidden];
+  const transformed = TESSERACT_VERTICES.map(transformTesseractVertex);
+  const segments = [];
+  const addUniquePoint = (points, point) => {
+    if (!points.some((other) => other.every((value, index) => Math.abs(value - point[index]) < 1e-5))) points.push(point);
+  };
+  for (const face of TESSERACT_FACES) {
+    const points = [];
+    for (let edge = 0; edge < 4; edge += 1) {
+      const start = transformed[face[edge]];
+      const end = transformed[face[(edge + 1) % 4]];
+      const startHidden = start[hiddenIndex];
+      const endHidden = end[hiddenIndex];
+      if (Math.abs(startHidden) < 1e-7) addUniquePoint(points, start);
+      if (startHidden * endHidden < -1e-10) {
+        const ratio = startHidden / (startHidden - endHidden);
+        addUniquePoint(points, start.map((value, index) => value + (end[index] - value) * ratio));
+      }
+    }
+    if (points.length >= 2) {
+      const project = (point) => projection.axes.map((axis) => point[axisIndex[axis]] * 1.4);
+      segments.push([project(points[0]), project(points[1])]);
+    }
+  }
+  const hiddenValues = transformed.map((point) => point[hiddenIndex]);
+  return { segments, projection, min: Math.min(...hiddenValues), max: Math.max(...hiddenValues) };
+}
+function complexSpinProjection() {
+  const projection = HYPER_PROJECTIONS[state.values.projection] || HYPER_PROJECTIONS.xyi;
+  const coordinates = {
+    x: state.values.positionX ?? 0,
+    y: state.values.positionY ?? 0,
+    z: state.values.positionZ ?? 0,
+    i: state.values.positionI ?? 0
+  };
+  const hiddenPosition = coordinates[projection.hidden];
+  const sliceRadius = Math.sqrt(Math.max(0, HYPERSPHERE_RADIUS ** 2 - hiddenPosition ** 2)) / HYPERSPHERE_RADIUS;
+  return { ...projection, coordinates, hiddenPosition, sliceRadius };
+}
+
+function mFieldProjection() {
+  const preset = state.values.mMode || "phase";
+  const resonance = { scalar: 0, vector: (2 * Math.PI) / 3, tensor: (4 * Math.PI) / 3 };
+  const rawPhase = Number(state.values.iPhase ?? .52);
+  const phase = preset === "scalar" ? resonance.scalar : preset === "vector" ? resonance.vector : preset === "tensor" ? resonance.tensor : rawPhase;
+  const circularDistance = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
+  const width = .72;
+  const amplitude = (center) => Math.exp(-(circularDistance(phase, center) ** 2) / (2 * width ** 2));
+  let scalar = amplitude(resonance.scalar);
+  let vector = amplitude(resonance.vector);
+  let tensor = amplitude(resonance.tensor);
+  if (preset === "mixed") scalar = vector = tensor = 1;
+  const total = scalar + vector + tensor || 1;
+  const coupling = Number(state.values.iCoupling ?? .72);
+  const leakage = Number(state.values.leakage ?? .18);
+  const coherence = Number(state.values.projectionCoherence ?? .84);
+  return { phase, coupling, leakage, coherence, scalar: scalar / total, vector: vector / total, tensor: tensor / total };
+}
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 let pointerStart = null;
@@ -308,6 +441,13 @@ const componentCatalog = {
     facts: [["Заряд", "0"], ["Спин", "1"], ["Масса покоя", "0"]],
     caveat: "После ионизации испускается новый фотон: это не тот же самый поглощённый квант."
   },
+  tesseract: {
+    type: "4D ГЕОМЕТРИЯ · ПРАВИЛЬНЫЙ МНОГОГРАННИК",
+    title: "Тессеракт",
+    description: "Четырёхмерный гиперкуб. Каркас показывает точные вершины и рёбра после перспективного проектирования из 4D в выбранное трёхмерное подпространство.",
+    facts: [["Вершины", "16"], ["Рёбра", "32"], ["Кубические ячейки", "8"]],
+    caveat: "Это не физический объект и не «тень» в буквальном смысле: видимая форма зависит от выбранной 3D-проекции и поворотов в плоскостях с осью i."
+  },
   neutrino: {
     type: "ЛЕПТОН · НЕЙТРИНО",
     title: "Нейтрино",
@@ -417,7 +557,8 @@ function applyParameterDrivenVisuals() {
     if (role === "condensate") object.material.opacity = 0.16 + visual.coherence * 0.62;
   });
   if (colliderVisual) {
-    const alpha = clamp(Number(state.values.detectorOpacity ?? 1), 0, 1);
+    // The detector is an optional context layer: keep it invisible until the user asks for it.
+    const alpha = clamp(Number(state.values.detectorOpacity ?? 0), 0, 1);
     colliderVisual.detector.traverse((object) => {
       if (!object.material) return;
       const materials = Array.isArray(object.material) ? object.material : [object.material];
@@ -427,7 +568,21 @@ function applyParameterDrivenVisuals() {
       });
     });
   }
-  if (state.selected.visual === "hybridMatter") {
+  if (state.selected.visual === "complexSpin") {
+    const projection = complexSpinProjection();
+    if (state.values.configuration === "lattice") {
+      const mode = ({ scalar: "scalar M-quant", vector: "vector M-quant", standing: "distributed standing M-wave" })[state.values.mMode] || "M-field";
+      $("#sceneScale").textContent = `bounded 3D M-field · 100 × 100 × 100 samples · sparse display · ${mode} · no 4D probe trajectory`;
+    } else {
+    const configuration = state.values.configuration === "lattice" ? "100 × 100 × 100 M-field samples · sparse visual lattice" : "single quasiparticle";
+    $("#sceneScale").textContent = `${configuration} · visible ${projection.axes.join("·")} · hidden ${projection.hidden} = ${projection.hiddenPosition.toFixed(2)} · slice diameter ${(projection.sliceRadius * 100).toFixed(0)}%`;
+    }
+  } else if (state.selected.visual === "polytope4d") {
+    const mode = state.values.tesseractMode === "projection" ? "4D perspective projection" : "3D slice";
+    const slice = tesseractSliceSegments();
+    const intersection = slice.segments.length ? `${slice.segments.length} boundary segments` : "no intersection — outside visible space";
+    $("#sceneScale").textContent = `${mode} · hidden ${slice.projection.hidden} ∈ [${slice.min.toFixed(2)}, ${slice.max.toFixed(2)}] · ${intersection}`;
+  } else if (state.selected.visual === "hybridMatter") {
     $("#sceneScale").textContent = `quark fraction ${(visual.quarkFraction * 100).toFixed(0)}% · packing ${visual.specimenScale.toFixed(2)}×`;
   } else if (state.selected.visual === "meson") {
     $("#sceneScale").textContent = `r ${(state.values.separation || 0).toFixed(2)} fm · κ ${(state.values.stringTension || 0).toFixed(2)} GeV/fm`;
@@ -544,6 +699,48 @@ function createBaryon(model) {
   }
 }
 
+function createConfinementDemo(model) {
+  const ru = (localStorage.getItem("qcd-neutrino-language") || "en") === "ru";
+  const flavors = model.composition || ["u", "u", "d"];
+  const selected = clamp(state.confinementChoice, 0, 2);
+  const corePositions = [new THREE.Vector3(-1.15, -.64, .25), new THREE.Vector3(.18, .72, -.22), new THREE.Vector3(1.05, -.46, -.15)];
+  const core = new THREE.Group();
+  const quarks = corePositions.map((position, index) => {
+    const quark = createFlavorParticle(flavors[index], position, .8);
+    tagComponent(quark, flavorVisual(flavors[index]).component, { confinement: index === selected ? "selected valence quark" : "baryon core", index });
+    core.add(quark);
+    return quark;
+  });
+  specimen.add(core);
+  corePositions.forEach((position, index) => {
+    if (index !== selected) specimen.add(tubeBetween(position, corePositions[(index + 1) % 3], mats.flux.clone(), .045));
+  });
+  const origin = corePositions[selected].clone();
+  const final = new THREE.Vector3(5.0, 1.0, .25);
+  const fluxMat = new THREE.MeshBasicMaterial({ color: 0xf2bf5b, transparent: true, opacity: .88 });
+  const mainFlux = new THREE.Mesh(new THREE.CylinderGeometry(.085, .085, 1, 14), fluxMat);
+  mainFlux.visible = false;
+  const coreFlux = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, 1, 14), fluxMat.clone());
+  const mesonFlux = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, 1, 14), fluxMat.clone());
+  coreFlux.visible = mesonFlux.visible = false;
+  specimen.add(mainFlux, coreFlux, mesonFlux);
+  const splitPoint = origin.clone().lerp(final, .55);
+  const createdAnti = createFlavorParticle(`${flavors[selected]}bar`, splitPoint, .67);
+  const createdQ = createFlavorParticle(flavors[selected], splitPoint, .67);
+  tagComponent(createdAnti, flavorVisual(`${flavors[selected]}bar`).component, { confinement: "created antiquark → meson" });
+  tagComponent(createdQ, flavorVisual(flavors[selected]).component, { confinement: "created quark → baryon" });
+  createdAnti.visible = createdQ.visible = false;
+  specimen.add(createdAnti, createdQ);
+  const flash = new THREE.Mesh(new THREE.SphereGeometry(.62, 20, 14), new THREE.MeshBasicMaterial({ color: 0xfff4b5, transparent: true, opacity: 0, wireframe: true }));
+  flash.position.copy(splitPoint); specimen.add(flash);
+  const baryonLabel = labelSprite(ru ? "цветонейтральный барион" : "colour-neutral baryon", "#7de7ff", .55); baryonLabel.position.set(-.45, -1.75, 0); baryonLabel.visible = false;
+  const mesonLabel = labelSprite(ru ? "цветонейтральный мезон" : "colour-neutral meson", "#f6cf67", .55); mesonLabel.position.set(3.5, -1.75, 0); mesonLabel.visible = false;
+  specimen.add(baryonLabel, mesonLabel);
+  const title = labelSprite(ru ? "выберите валентный кварк и вытяните его" : "select a valence quark, then pull it", "#f2bf5b", .62);
+  title.position.set(0, -2.55, 0); specimen.add(title);
+  animated.push({ type: "baryonConfinement", object: quarks[selected], origin, final, mainFlux, coreFlux, mesonFlux, createdQ, createdAnti, flash, baryonLabel, mesonLabel, title });
+}
+
 function createLepton(model) {
   createShell(2.7, 3);
   const isNeutrino = model.leptonKind === "neutrino";
@@ -585,6 +782,180 @@ function createAtom(model) {
     specimen.add(electron);
     animated.push({ type: "electron", object: electron, radius, phase: i * Math.PI, tilt: orbit.rotation.clone(), speed: .7 + i * .2, electronIndex: i });
     primaryParticles.push(electron);
+  }
+}
+
+function createComplexSpinQuasiparticle() {
+  const coreMaterial = new THREE.MeshStandardMaterial({ color: 0x5fe7ff, emissive: 0x0b97d5, emissiveIntensity: 1.35, transparent: true, opacity: .95, roughness: .2, metalness: .06 });
+  if (state.values.configuration === "lattice") {
+    // The conceptual field has 100³ samples. Rendering all one million as
+    // spheres would make the laboratory unusable, so each visible dot is a
+    // deliberately sparse representative cell of a 10³ block.
+    const sampleSide = 100;
+    const displaySide = 11;
+    const spacing = 3.15;
+    const lattice = new THREE.InstancedMesh(new THREE.SphereGeometry(1.46, 12, 8), coreMaterial, displaySide ** 3);
+    lattice.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    tagComponent(lattice, "complexSpin", { representation: "7 × 7 × 7 lattice of 3D slices of the hypothetical 4D quasiparticle" });
+    const offsets = [];
+    for (let x = 0; x < displaySide; x += 1) {
+      for (let y = 0; y < displaySide; y += 1) {
+        for (let z = 0; z < displaySide; z += 1) offsets.push(new THREE.Vector3((x - 5) * spacing, (y - 5) * spacing, (z - 5) * spacing));
+      }
+    }
+    specimen.add(lattice);
+    primaryParticles.push(lattice);
+    const fieldSize = (displaySide - 1) * spacing + 1.8;
+    const fieldVolume = new THREE.Mesh(
+      new THREE.BoxGeometry(fieldSize, fieldSize, fieldSize),
+      new THREE.MeshBasicMaterial({ color: 0x39dff4, transparent: true, opacity: .025, depthWrite: false })
+    );
+    const fieldEdges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(fieldSize, fieldSize, fieldSize)),
+      new THREE.LineBasicMaterial({ color: 0x42d9ef, transparent: true, opacity: .32 })
+    );
+    fieldVolume.visible = false;
+    fieldEdges.visible = false;
+    specimen.add(fieldVolume, fieldEdges);
+    fieldObjects.push(fieldVolume, fieldEdges);
+    animated.push({ type: "complexSpinLattice", lattice, offsets, fieldVolume, fieldEdges, sampleSide, displaySide });
+    return;
+  }
+  const core = new THREE.Mesh(new THREE.SphereGeometry(1.46, 64, 48), coreMaterial);
+  tagComponent(core, "complexSpin", { representation: "3D hyperplane slice of a hypothetical 4D hypersphere" });
+  specimen.add(core);
+  primaryParticles.push(core);
+  const spinArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, .2).normalize(), new THREE.Vector3(), 2.05, 0xf4ce68, .34, .16);
+  specimen.add(spinArrow);
+  animated.push({ type: "complexSpin", core, spinArrow });
+}
+
+function createTesseract() {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(TESSERACT_EDGES.length * 6), 3));
+  const wireframe = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: 0xf4ce68, transparent: true, opacity: .96 }));
+  tagComponent(wireframe, "tesseract", { representation: "4D tesseract shown as either a perspective projection or an exact 3D hyperplane slice" });
+  specimen.add(wireframe);
+  animated.push({ type: "tesseract", object: wireframe, geometry });
+}
+
+function fitImportedAsset(asset, targetSize = 6.2) {
+  // Imported assets often have an authoring pivot far from their visible mesh.
+  // Normalize the visual bounding box at the laboratory origin before exposing it
+  // to OrbitControls, so camera orbit and rotation are always around the object.
+  const frame = new THREE.Group();
+  frame.name = "centered-import-frame";
+  frame.add(asset);
+  frame.updateMatrixWorld(true);
+  const initialBox = new THREE.Box3().setFromObject(frame);
+  const size = initialBox.getSize(new THREE.Vector3());
+  const longest = Math.max(size.x, size.y, size.z, .001);
+  asset.scale.multiplyScalar(targetSize / longest);
+  frame.updateMatrixWorld(true);
+  const centeredBox = new THREE.Box3().setFromObject(frame);
+  asset.position.sub(centeredBox.getCenter(new THREE.Vector3()));
+  frame.updateMatrixWorld(true);
+  asset.traverse((node) => {
+    if (node.isMesh) {
+      node.castShadow = true;
+      node.receiveShadow = true;
+    }
+  });
+  return frame;
+}
+
+function loadMacroAsset(model, url, loader, targetSize) {
+  const selectedId = model.id;
+  loader.load(url, (loaded) => {
+    if (state.selected.id !== selectedId) return;
+    const asset = loaded.scene || loaded;
+    const frame = fitImportedAsset(asset, targetSize);
+    specimen.add(frame);
+    primaryParticles.push(frame);
+    controls.target.set(0, 0, 0);
+    controls.update();
+    setStatus("LOCAL NASA ASSET · ready", true);
+  }, undefined, () => setStatus("MACRO ASSET UNAVAILABLE · check local files", true));
+}
+
+function createMacroObject(model) {
+  if (model.macroKind === "jupiter") {
+    loadMacroAsset(model, "./assets/models/nasa-jupiter.glb", gltfLoader, 6.4);
+    return;
+  }
+  if (model.macroKind === "sun") {
+    const selectedId = model.id;
+    new THREE.TextureLoader().load("./assets/models/nasa-sun-texture.jpg", (texture) => {
+      if (state.selected.id !== selectedId) return;
+      texture.colorSpace = THREE.SRGBColorSpace;
+      const star = new THREE.Group();
+      const surface = new THREE.Mesh(
+        new THREE.SphereGeometry(3.05, 72, 48),
+        new THREE.MeshStandardMaterial({ map: texture, emissiveMap: texture, emissive: 0xff9a36, emissiveIntensity: 1.35, roughness: .82 })
+      );
+      const corona = new THREE.Mesh(
+        new THREE.SphereGeometry(3.34, 64, 40),
+        new THREE.MeshBasicMaterial({ color: 0xffb34c, transparent: true, opacity: .12, side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false })
+      );
+      const equator = new THREE.Mesh(new THREE.TorusGeometry(3.1, .025, 8, 128), new THREE.MeshBasicMaterial({ color: 0xffd47a, transparent: true, opacity: .35 }));
+      equator.rotation.x = Math.PI / 2;
+      star.add(surface, corona, equator);
+      specimen.add(star);
+      primaryParticles.push(star);
+      animated.push({ type: "macroSpin", object: star, speed: .028 });
+      setStatus("NASA SUN TEXTURE · ready", true);
+    }, undefined, () => setStatus("SUN ASSET UNAVAILABLE · check local files", true));
+    return;
+  }
+  if (model.macroKind === "blackHole") {
+    const blackHole = new THREE.Group();
+    const horizon = new THREE.Mesh(new THREE.SphereGeometry(1.48, 64, 48), new THREE.MeshStandardMaterial({ color: 0x000104, roughness: .15, metalness: .35 }));
+    const photonRing = new THREE.Mesh(new THREE.TorusGeometry(1.63, .07, 16, 160), new THREE.MeshBasicMaterial({ color: 0xfff1b5, transparent: true, opacity: .9, blending: THREE.AdditiveBlending }));
+    photonRing.rotation.x = Math.PI / 2;
+    blackHole.add(horizon, photonRing);
+    const diskLayers = [
+      [1.82, 2.55, 0xffe3a1, .82, .04],
+      [2.42, 3.5, 0xff8438, .72, -.025],
+      [3.35, 4.72, 0x9d2619, .5, .015]
+    ];
+    diskLayers.forEach(([inner, outer, color, opacity, y], index) => {
+      const disk = new THREE.Mesh(
+        new THREE.RingGeometry(inner, outer, 160, 4),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false })
+      );
+      disk.rotation.x = -Math.PI / 2;
+      disk.position.y = y;
+      blackHole.add(disk);
+      animated.push({ type: "macroSpin", object: disk, speed: .08 + index * .025, direction: index % 2 ? -1 : 1 });
+    });
+    // A lifted, dim secondary image makes the lensing cue readable in 3D without
+    // pretending that this is a full general-relativistic ray tracer.
+    const lensedBand = new THREE.Mesh(
+      new THREE.TorusGeometry(3.3, .19, 12, 160, Math.PI * 1.45),
+      new THREE.MeshBasicMaterial({ color: 0xffb04e, transparent: true, opacity: .42, blending: THREE.AdditiveBlending, depthWrite: false })
+    );
+    lensedBand.rotation.set(Math.PI / 2.45, 0, -.38);
+    lensedBand.position.y = .62;
+    blackHole.add(lensedBand);
+    const jets = [1, -1].map((sign) => {
+      const jet = new THREE.Mesh(new THREE.ConeGeometry(.24, 3.6, 20, 1, true), new THREE.MeshBasicMaterial({ color: 0x6fdcff, transparent: true, opacity: .18, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false }));
+      jet.position.y = sign * 2.6;
+      if (sign < 0) jet.rotation.x = Math.PI;
+      blackHole.add(jet);
+      return jet;
+    });
+    blackHole.rotation.set(.24, -.42, .08);
+    specimen.add(blackHole);
+    primaryParticles.push(blackHole);
+    animated.push({ type: "blackHole", object: blackHole, photonRing, lensedBand, jets });
+    setStatus("RELATIVISTIC ACCRETION-DISK MODEL · ready", true);
+    return;
+  }
+  const star = makeSphere(1.75, new THREE.MeshStandardMaterial({ color: 0x8ccaff, emissive: 0x1756bc, emissiveIntensity: 1.4, roughness: .38 }), [0, 0, 0], 48);
+  specimen.add(star); primaryParticles.push(star);
+  for (let i = 0; i < 3; i += 1) {
+    const field = new THREE.Mesh(new THREE.TorusGeometry(2.3 + i * .34, .028, 8, 100), new THREE.MeshBasicMaterial({ color: 0x7ef6ff, transparent: true, opacity: .58 }));
+    field.rotation.set(.55 + i * .4, .3 + i * .5, 0); specimen.add(field); animated.push({ type: "ring", object: field, phase: i, speed: .12 + i * .03 });
   }
 }
 
@@ -749,7 +1120,8 @@ function createMeson(model) {
 
 function createColliderBeamParticle(x, direction, particleId = "proton") {
   const group = new THREE.Group();
-  const hadron = ["proton", "antiproton", "pionPlus", "pionMinus"].includes(particleId);
+  const baryon = BARYON_BEAMS[particleId];
+  const hadron = Boolean(baryon) || ["pionPlus", "pionMinus"].includes(particleId);
   const componentId = particleId === "antiproton" ? "antiproton" : particleId.startsWith("pion") ? "pion" : particleId === "positron" ? "positron" : particleId.startsWith("muon") ? "muon" : particleId;
   if (particleId === "photon") {
     const core = makeSphere(.19, mats.photon, [0, 0, 0], 16);
@@ -760,12 +1132,16 @@ function createColliderBeamParticle(x, direction, particleId = "proton") {
       group.add(ring);
     }
   } else if (hadron) {
-    const shellColor = particleId === "antiproton" ? 0xee72d5 : particleId === "pionPlus" ? 0x63df9b : particleId === "pionMinus" ? 0x6da2ff : 0xf0ba55;
+    const anti = particleId.startsWith("anti");
+    const shellColor = anti ? 0xee72d5 : particleId === "pionPlus" ? 0x63df9b : particleId === "pionMinus" ? 0x6da2ff : particleId === "hyperon" ? 0x9b70e4 : 0xf0ba55;
     const shellRadius = particleId.startsWith("pion") ? .48 : .62;
     const shell = new THREE.Mesh(new THREE.IcosahedronGeometry(shellRadius, 2), new THREE.MeshPhysicalMaterial({ color: shellColor, transparent: true, opacity: .2, roughness: .25, transmission: .1, depthWrite: false }));
     group.add(shell);
     const offsets = particleId.startsWith("pion") ? [[-.16, .12, 0], [.16, -.12, 0]] : [[-.2, .2, .12], [.22, .12, -.18], [0, -.26, .1]];
-    offsets.forEach((offset, index) => group.add(makeSphere(.18, [mats.red, mats.green, mats.blue][index], offset, 14)));
+    offsets.forEach((offset, index) => {
+      const flavor = baryon?.[1][index];
+      group.add(makeSphere(.18, flavor?.startsWith("s") ? mats.strange : [mats.red, mats.green, mats.blue][index], offset, 14));
+    });
   } else {
     const color = particleId === "electron" ? 0x6da2ff : particleId === "positron" ? 0xf2bf5b : particleId === "muonMinus" ? 0x7c86ff : 0xee72d5;
     const radius = particleId.startsWith("muon") ? .32 : .25;
@@ -797,6 +1173,9 @@ function createCollider(model) {
     );
     cylinder.rotation.z = Math.PI / 2;
     tagComponent(cylinder, "colliderDetector", { layer: index + 1 });
+    // The transparent detector is a visual aid, not an event product.  Keep it
+    // out of the picking path so it cannot hide a track behind it.
+    cylinder.userData.pickable = false;
     detector.add(cylinder);
     for (const x of [-5.2, -3.2, 0, 3.2, 5.2]) {
       const ring = new THREE.Mesh(new THREE.TorusGeometry(radius, .025, 6, 96), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: opacity * 1.4 }));
@@ -806,12 +1185,14 @@ function createCollider(model) {
     }
   });
   specimen.add(detector);
-  const beamA = model.id === "colliderWorkbench" ? state.values.beamA : "proton";
-  const beamB = model.id === "colliderWorkbench" ? state.values.beamB : "proton";
+  const collision = state.collisionContext;
+  const beamA = collision?.beamA || (model.id === "colliderWorkbench" ? state.values.beamA : "proton");
+  const beamB = collision?.beamB || (model.id === "colliderWorkbench" ? state.values.beamB : "proton");
   const leftBeam = createColliderBeamParticle(-8, 1, beamA);
   const rightBeam = createColliderBeamParticle(8, -1, beamB);
   const vertex = makeSphere(.15, mats.boson, [0, 0, 0], 18);
   tagComponent(vertex, "colliderDetector", { layer: "interaction point" });
+  vertex.userData.pickable = false;
   specimen.add(vertex);
   colliderVisual = { detector, leftBeam, rightBeam, vertex, beamA, beamB };
   applyParameterDrivenVisuals();
@@ -909,9 +1290,14 @@ function rebuildSpecimen() {
   mesonVisual = null;
   colliderVisual = null;
   const model = state.selected;
-  if (model.visual === "baryon") createBaryon(model);
+  if (isBaryonModel(model) && state.collisionContext) createCollider(model);
+  else if (isBaryonModel(model) && state.view === "confinement") createConfinementDemo(model);
+  else if (model.visual === "baryon") createBaryon(model);
   else if (model.visual === "lepton") createLepton(model);
   else if (model.visual === "atom") createAtom(model);
+  else if (model.visual === "complexSpin") createComplexSpinQuasiparticle();
+  else if (model.visual === "polytope4d") createTesseract();
+  else if (model.visual === "macro") createMacroObject(model);
   else if (model.visual === "denseBaryons") createDenseBaryons();
   else if (model.visual === "hybridMatter") createHybridMatter(model);
   else if (model.visual === "condensateMatter") createCondensateMatter(model);
@@ -921,10 +1307,11 @@ function rebuildSpecimen() {
   else if (model.visual === "collider") createCollider(model);
   else if (["quarkFluid", "strangeMatter", "pairedMatter", "strangelet"].includes(model.visual)) createQuarkMedium(model);
   else if (model.visual === "neutrinoLens") createNeutrinoLens();
-  const colliderMode = model.visual === "collider";
-  platform.visible = !colliderMode;
-  platformRing.visible = !colliderMode;
-  chamberRings.visible = !colliderMode;
+  const cleanMacroStage = model.visual === "macro";
+  const colliderMode = model.visual === "collider" || Boolean(state.collisionContext && isBaryonModel(model));
+  platform.visible = !colliderMode && !cleanMacroStage;
+  platformRing.visible = !colliderMode && !cleanMacroStage;
+  chamberRings.visible = !colliderMode && !cleanMacroStage;
   applyViewMode();
   applyParameterDrivenVisuals();
   hideComponentInfo();
@@ -936,11 +1323,11 @@ function initializeValues(model) {
 
 function colliderProcessOptions(values) {
   const automatic = [["auto", "Авто · по типам пучков"]];
-  const hadrons = new Set(["proton", "antiproton", "pionPlus", "pionMinus"]);
+  const hadrons = new Set([...Object.keys(BARYON_BEAMS), "pionPlus", "pionMinus"]);
   const leptons = new Set(["electron", "positron", "muonMinus", "muonPlus"]);
   const a = values.beamA;
   const b = values.beamB;
-  if (hadrons.has(a) && hadrons.has(b)) return [...automatic, ["softQCD", "Soft QCD / minimum-bias"], ["hardQCD", "Hard QCD / dijet"]];
+  if (hadrons.has(a) && hadrons.has(b)) return [...automatic, ...(BARYON_PARTNERS[a] === b ? [["annihilation", "Baryon–antibaryon annihilation"]] : []), ["softQCD", "Soft QCD / minimum-bias"], ["hardQCD", "Hard QCD / dijet"]];
   if ((leptons.has(a) && hadrons.has(b)) || (hadrons.has(a) && leptons.has(b))) return [...automatic, ["dis", "Deep-inelastic scattering"]];
   if ((a === "photon" && hadrons.has(b)) || (hadrons.has(a) && b === "photon")) return [...automatic, ["photoproduction", "Photoproduction"]];
   if (a === "photon" && b === "photon") return [...automatic, ["pairProduction", "γγ pair production"]];
@@ -950,14 +1337,15 @@ function colliderProcessOptions(values) {
 }
 
 function beamLabel(id) {
-  return ({ proton: "p", antiproton: "p̄", pionPlus: "π⁺", pionMinus: "π⁻", electron: "e⁻", positron: "e⁺", muonMinus: "μ⁻", muonPlus: "μ⁺", photon: "γ" })[id] || id;
+  return ({ proton: "p", antiproton: "p̄", neutron: "n", antineutron: "n̄", hyperon: "Λ", antihyperon: "Λ̄", pionPlus: "π⁺", pionMinus: "π⁻", electron: "e⁻", positron: "e⁺", muonMinus: "μ⁻", muonPlus: "μ⁺", photon: "γ" })[id] || id;
 }
 
 function renderCatalog() {
   const filters = $("#familyFilters");
-  const baseFamilies = families.filter(([id]) => !["ordinary", "exotic"].includes(id));
+  const baseFamilies = families.filter(([id]) => !["ordinary", "exotic", "macro"].includes(id));
+  const macroFamily = families.find(([id]) => id === "macro");
   const ordinaryFamilies = [["baryon", "Барионы"], ["lepton", "Лептоны"], ["nuclear", "Ядра и атомы"]];
-  const orderedFamilies = [...baseFamilies.slice(0, 1), ...ordinaryFamilies, ...baseFamilies.slice(1), families.find(([id]) => id === "exotic")].filter(Boolean);
+  const orderedFamilies = [...baseFamilies.slice(0, 1), ...ordinaryFamilies, ...baseFamilies.slice(1), families.find(([id]) => id === "exotic"), macroFamily].filter(Boolean);
   filters.innerHTML = orderedFamilies.map(([id, label]) => `<button type="button" class="${state.family === id ? "active" : ""}" data-family="${id}">${label}</button>`).join("");
   const query = state.search.trim().toLowerCase();
   const familyMatches = (model) => {
@@ -994,6 +1382,7 @@ function renderCatalog() {
 
 function renderInspector() {
   const model = state.selected;
+  renderViewModes(model);
   const communicationLabBtn = $("#communicationLabBtn");
   if (communicationLabBtn) communicationLabBtn.remove();
   const communicationViewBtn = $("#communicationViewBtn");
@@ -1016,12 +1405,24 @@ function renderInspector() {
   $("#telemetryObject").textContent = model.composition?.join("") || model.title;
   $("#telemetryScale").textContent = model.visual === "atom" ? "10⁻¹⁰ m" : model.visual === "neutrinoLens" ? "macroscopic" : model.visual === "collider" ? "event display" : "1 fm";
   $("#telemetryState").textContent = model.status;
-  $("#runInteractionBtn span").textContent = interactionLabel(model);
+  const isMFieldRegion = model.visual === "complexSpin" && state.values.configuration === "lattice";
+  const matrixPassage = isMFieldRegion && state.view === "passage";
+  const phaseDemo = isMFieldRegion && state.view === "phaseDemo";
+  $("#runInteractionBtn").hidden = ["macro", "polytope4d"].includes(model.visual) || (model.visual === "complexSpin" && !matrixPassage && !phaseDemo);
+  $("#runInteractionBtn span").textContent = matrixPassage ? ((localStorage.getItem("qcd-neutrino-language") || "en") === "ru" ? "Запустить зонд" : "Run probe") : interactionLabel(model);
 
-  $("#parameterControls").innerHTML = model.parameters.map((parameter) => {
+  if (phaseDemo) $("#runInteractionBtn span").textContent = (localStorage.getItem("qcd-neutrino-language") || "en") === "ru" ? "Р—Р°РїСѓСЃС‚РёС‚СЊ РґРµРјРѕРЅСЃС‚СЂР°С†РёСЋ" : "Run demonstration";
+  const visibleParameters = model.parameters.filter((parameter) => {
+    const mFieldParameters = ["probeType", "mMode", "iPhase", "iCoupling", "leakage", "projectionCoherence"];
+    if (mFieldParameters.includes(parameter.key)) return isMFieldRegion;
+    // The 4D projection controls describe only the isolated 4D quasiparticle.
+    if (isMFieldRegion && ["projection", "positionX", "positionY", "positionZ", "positionI", "precession", "phaseOffset"].includes(parameter.key)) return false;
+    return true;
+  });
+  $("#parameterControls").innerHTML = visibleParameters.map((parameter) => {
     const value = state.values[parameter.key];
     if (parameter.type === "select") {
-      const options = parameter.key === "processMode" ? colliderProcessOptions(state.values) : parameter.options;
+      const options = parameter.key === "processMode" ? colliderProcessOptions(state.values) : ["beamA", "beamB"].includes(parameter.key) ? colliderBeamOptions() : parameter.options;
       return `<div class="parameter-control">
         <label for="param-${parameter.key}"><span>${parameter.label}</span></label>
         <select id="param-${parameter.key}" data-param="${parameter.key}">${options.map(([optionValue, label]) => `<option value="${optionValue}" ${optionValue === value ? "selected" : ""}>${label}</option>`).join("")}</select>
@@ -1031,24 +1432,30 @@ function renderInspector() {
       <label for="param-${parameter.key}"><span>${parameter.label}</span><output id="out-${parameter.key}">${formatParameter(value, parameter)}</output></label>
       <input id="param-${parameter.key}" data-param="${parameter.key}" type="range" min="${parameter.min}" max="${parameter.max}" step="${parameter.step}" value="${value}">
     </div>`;
-  }).join("") + (model.visual === "collider" ? `
+  }).join("") + (isMFieldRegion ? mFieldProjectionPanel() : "") + (matrixPassage ? matrixPassageExplanation() : "") + (phaseDemo ? phaseDemoExplanation() : "") + (model.visual === "collider" ? `
     <div class="collider-controls">
       <div class="collider-controls-title">Collider display</div>
-      <label for="detectorOpacity"><span>Detector transparency</span><output id="detectorOpacityOut">${Math.round((state.values.detectorOpacity ?? 1) * 100)}%</output></label>
-      <input id="detectorOpacity" type="range" min="0" max="1" step="0.01" value="${state.values.detectorOpacity ?? 1}">
+      <label for="detectorOpacity"><span>Detector visibility</span><output id="detectorOpacityOut">${Math.round((state.values.detectorOpacity ?? 0) * 100)}%</output></label>
+      <input id="detectorOpacity" type="range" min="0" max="1" step="0.01" value="${state.values.detectorOpacity ?? 0}">
       <label for="collisionSpeed"><span>Event speed</span><output id="collisionSpeedOut">${(state.values.collisionSpeed ?? 1).toFixed(2)}×</output></label>
       <input id="collisionSpeed" type="range" min="0.05" max="2" step="0.05" value="${state.values.collisionSpeed ?? 1}">
       <button id="colliderPauseBtn" class="solver-btn" type="button">${state.paused ? "Resume event" : "Pause event"}</button>
-    </div>` : "");
+  </div>` : "") + (model.visual === "collider" ? collisionExplanation() : "") + (isBaryonModel(model) && state.view === "confinement" ? confinementControls() : "");
   $("#parameterControls").querySelectorAll("[data-param]").forEach((control) => control.addEventListener(control.tagName === "SELECT" ? "change" : "input", () => {
     const parameter = model.parameters.find((item) => item.key === control.dataset.param);
     state.values[control.dataset.param] = parameter.type === "select" ? control.value : Number(control.value);
     if (parameter.type !== "select") $(`#out-${control.dataset.param}`).textContent = formatParameter(Number(control.value), parameter);
+    if (control.dataset.param === "configuration") {
+      state.view = "structure";
+      state.interaction = null;
+      renderViewModes(state.selected);
+      renderInspector();
+    }
     if (["beamA", "beamB"].includes(control.dataset.param)) {
       state.values.processMode = "auto";
       renderInspector();
     }
-    if (["beamA", "beamB", "processMode", "baryonNumber"].includes(control.dataset.param) || (state.selected.visual === "meson" && ["separation", "stringTension", "constituentMass"].includes(control.dataset.param))) rebuildSpecimen();
+    if (["beamA", "beamB", "processMode", "baryonNumber", "configuration"].includes(control.dataset.param) || (state.selected.visual === "meson" && ["separation", "stringTension", "constituentMass"].includes(control.dataset.param))) rebuildSpecimen();
     runLocalSolver();
     applyParameterDrivenVisuals();
     const visual = state.visual;
@@ -1068,10 +1475,86 @@ function renderInspector() {
     $("#collisionSpeedOut").textContent = `${state.values.collisionSpeed.toFixed(2)}×`;
   });
   $("#colliderPauseBtn")?.addEventListener("click", () => $("#pauseBtn").click());
+  $("#confinementRunBtn")?.addEventListener("click", () => {
+    state.confinementPulled = true;
+    state.interaction = "baryonConfinement";
+    state.interactionTime = 0;
+    state.interactionPhase = null;
+    setStatus("CONFINEMENT · pulling selected valence quark", true);
+    renderInspector();
+  });
+  $$("[data-confinement-quark]").forEach((button) => button.addEventListener("click", () => {
+    state.confinementChoice = Number(button.dataset.confinementQuark);
+    state.confinementPulled = false;
+    state.interaction = null;
+    state.interactionTime = 0;
+    rebuildSpecimen();
+    renderInspector();
+  }));
 
   $("#sourceLinks").innerHTML = model.sources.map(([label, url]) => `<a href="${url}" target="_blank" rel="noreferrer"><span>${label}</span><i data-lucide="external-link" aria-hidden="true"></i></a>`).join("");
   if (model.id === "neutrinoLens" && state.communicationOpen) renderCommunicationControls();
   window.lucide?.createIcons();
+}
+
+function renderViewModes(model) {
+  const buttons = $$("#viewModes button[data-view]");
+  const ru = (localStorage.getItem("qcd-neutrino-language") || "en") === "ru";
+  const labels = model.visual === "macro"
+    ? [["structure", "orbit", ru ? "Объект" : "Object"]]
+    : model.visual === "complexSpin"
+    ? [["structure", "layers-3", ru ? "3D-проекция" : "3D projection"], ...(state.values.configuration === "lattice" ? [["passage", "scan-line", ru ? "Прохождение" : "Passage"]] : [])]
+    : model.visual === "polytope4d"
+    ? [["structure", "layers-3", ru ? "3D-проекция" : "3D projection"]]
+    : isBaryonModel(model)
+    ? [["structure", "orbit", ru ? "Структура" : "Structure"], ["collision", "swords", ru ? "Столкнуть" : "Collide"], ["annihilation", "zap", ru ? "Аннигиляция" : "Annihilate"], ["confinement", "stretch-horizontal", ru ? "Конфайнмент" : "Confinement"]]
+    : [["structure", "orbit", ru ? "Структура" : "Structure"], ["interaction", "zap", ru ? "Взаимодействие" : "Interaction"], ["field", "waves", ru ? "Поле" : "Field"]];
+  if (model.visual === "complexSpin" && state.values.configuration === "lattice") {
+    labels.push(["phaseDemo", "orbit", ru ? "Р¤Р°Р·РѕРІР°СЏ РґРµРјРѕРЅСЃС‚СЂР°С†РёСЏ" : "Phase demonstration"]);
+  }
+  if (!labels.some(([view]) => view === state.view)) state.view = "structure";
+  buttons.forEach((button, index) => {
+    const entry = labels[index];
+    button.hidden = !entry;
+    if (!entry) return;
+    const [view, icon, label] = entry;
+    button.dataset.view = view;
+    button.innerHTML = `<i data-lucide="${icon}"></i> ${label}`;
+    button.classList.toggle("active", state.view === view);
+  });
+  window.lucide?.createIcons();
+}
+
+function colliderBeamOptions() {
+  return [
+    ...Object.entries(BARYON_BEAMS).map(([id, [label]]) => [id, label]),
+    ["pionPlus", "π⁺ · pion"], ["pionMinus", "π⁻ · pion"], ["electron", "e⁻ · electron"], ["positron", "e⁺ · positron"], ["muonMinus", "μ⁻ · muon"], ["muonPlus", "μ⁺ · antimuon"], ["photon", "γ · photon"]
+  ];
+}
+
+function collisionExplanation() {
+  const ru = (localStorage.getItem("qcd-neutrino-language") || "en") === "ru";
+  const event = state.solverResult?.event;
+  const process = state.solverResult?.state?.processLabel || "p + p → hadrons";
+  const tracks = event?.tracks || [];
+  if (event?.mode === "annihilation") {
+    return `<section class="collision-explanation"><span>${ru ? "Аннигиляция" : "Annihilation"}</span><strong>${process}</strong><p>${ru ? "В этой наглядной сцене энергия покоя пары барион–антибарион показана как расширяющиеся фотонные фронты γ — жёлтые кольца и лучи. Поэтому здесь намеренно нет случайных треков «заряженных адронов»." : "This explanatory scene renders the baryon–antibaryon rest energy as expanding photon wavefronts γ — yellow rings and rays. It deliberately avoids generic charged-hadron tracks."}</p><small>${ru ? "В реальных p–p̄ аннигиляциях часто образуются пионы и другие адроны, которые затем распадаются; «чистая энергия» здесь означает перенос энергии фотонами в идеализированном радиационном канале." : "Real p–p̄ annihilations often produce pions and other hadrons which later decay; “pure energy” here means photon-carried energy in an idealised radiative channel."}</small></section>`;
+  }
+  const charged = tracks.filter((track) => track.type === "chargedHadron").length;
+  const neutral = tracks.filter((track) => track.type === "neutralHadron" || track.type === "photon").length;
+  const result = tracks.length
+    ? (ru ? `В учебном событии получились ${charged} заряженных и ${neutral} нейтральных/фотонных кандидатов. Треки показывают возможные конечные продукты, но не являются точной идентификацией вида частицы.` : `The generated educational event contains ${charged} charged and ${neutral} neutral / photon candidates. Tracks are possible final-state particles, not a species-identification claim.`)
+    : (ru ? "Выберите пучки и запустите столкновение. Здесь появится описание конечных продуктов." : "Choose beams and run the collision. The panel will describe the generated final-state candidates here.");
+  return `<section class="collision-explanation"><span>${ru ? "Результат столкновения" : "Collision outcome"}</span><strong>${process}</strong><p>${result}</p><small>${ru ? "В pp-столкновении цветные партоны образуют струи и адронизируются; свободные кварки не показываются из-за конфайнмента." : "For pp collisions, colored partons shower and hadronize; isolated quarks are not shown because of confinement."}</small></section>`;
+}
+
+function confinementControls() {
+  const ru = (localStorage.getItem("qcd-neutrino-language") || "en") === "ru";
+  const labels = state.selected.composition.map((flavor, index) => `${flavorVisual(flavor).label}${index + 1}`);
+  const progress = state.confinementPulled
+    ? (ru ? "Анимация идёт: струна растягивается, затем рождается q q̄-пара." : "Animation running: the string stretches, then a q q̄ pair appears.")
+    : (ru ? "Выберите один валентный кварк и запустите его вытягивание." : "Choose one valence quark and start pulling it.");
+  return `<section class="confinement-explanation"><span>${ru ? "Демонстрация конфайнмента" : "Confinement demonstration"}</span><p>${ru ? "Цветовая трубка запасает энергию приблизительно как V(r) ≈ σr. При достаточном растяжении вакуум создаёт q q̄-пару: остаточный дикварк с новым q образует барион, а вытянутый q с новым q̄ — мезон. Свободный кварк не появляется." : "The colour-flux tube stores energy approximately as V(r) ≈ σr. Once stretched far enough, the vacuum creates a q q̄ pair: the residual diquark plus the new q form a baryon, and the pulled q plus the new q̄ form a meson. No free quark appears."}</p><div class="confinement-choices">${labels.map((label, index) => `<button class="solver-btn ${index === state.confinementChoice ? "active" : ""}" data-confinement-quark="${index}" type="button">${label}</button>`).join("")}</div><button id="confinementRunBtn" class="solver-btn" type="button">${ru ? "Вытянуть выбранный кварк" : "Pull selected quark"}</button><small>${progress}</small></section>`;
 }
 
 function setFormulaTerms(target, terms) {
@@ -1125,6 +1608,7 @@ function selectModel(id) {
   const model = modelRegistry.find((item) => item.id === id);
   if (!model) return;
   state.selected = model;
+  state.collisionContext = null;
   closeFormulaModal();
   if (model.id !== "neutrinoLens") $("#communicationPanel").hidden = true;
   initializeValues(model);
@@ -1146,10 +1630,11 @@ window.addEventListener("qcd-language-change", (event) => {
 });
 
 function familyTitle(family) {
-  return ({ ordinary: "ordinary matter", dense: "dense matter", quark: "quark matter", meson: "meson spectroscopy", collider: "collider event lab", strange: "strange matter", hypothetical: "my hypotheses" })[family] || family;
+  return ({ ordinary: "ordinary matter", dense: "dense matter", quark: "quark matter", meson: "meson spectroscopy", collider: "collider event lab", strange: "strange matter", hypothetical: "my hypotheses", macro: "macro objects" })[family] || family;
 }
 
 function interactionLabel(model) {
+  if (state.collisionContext && isBaryonModel(model)) return state.view === "annihilation" ? "Запустить аннигиляцию" : "Столкнуть частицы";
   if (model.interaction === "photon") return "Возбудить / ионизировать";
   if (model.interaction === "weak") return "Показать β-распад";
   if (model.interaction === "neutrino") return "Послать нейтрино";
@@ -1170,14 +1655,16 @@ function formatParameter(value, parameter) {
 
 function runLocalSolver() {
   const start = performance.now();
-  state.solverResult = solveModel(state.selected, state.values);
+  const collisionModel = state.collisionContext ? modelRegistry.find((model) => model.id === "colliderWorkbench") : null;
+  const collisionValues = state.collisionContext ? { ...state.values, ...state.collisionContext } : state.values;
+  state.solverResult = solveModel(collisionModel || state.selected, collisionValues);
   state.solverMs = performance.now() - start;
   $("#telemetrySolver").textContent = `local / ${state.solverMs.toFixed(2)} ms`;
   $("#chartSubtitle").textContent = state.solverResult.primaryLabel;
   const supported = state.solverResult.state?.supported !== false;
-  $("#runInteractionBtn").disabled = state.selected.interaction === "collision" && !supported;
-  if (state.selected.id === "colliderWorkbench") {
-    const pair = `${beamLabel(state.values.beamA)} ↔ ${beamLabel(state.values.beamB)}`;
+  $("#runInteractionBtn").disabled = (state.selected.interaction === "collision" || Boolean(state.collisionContext && isBaryonModel(state.selected))) && !supported;
+  if (state.selected.id === "colliderWorkbench" || state.collisionContext) {
+    const pair = `${beamLabel(collisionValues.beamA)} ↔ ${beamLabel(collisionValues.beamB)}`;
     $("#sceneScale").textContent = `${pair} · ${state.solverResult.state.processLabel}`;
     $("#telemetryObject").textContent = pair;
     $("#telemetryState").textContent = supported ? state.solverResult.state.processLabel : "unsupported pair";
@@ -1272,16 +1759,59 @@ function applyViewMode() {
   primaryParticles.forEach((object) => { object.visible = true; });
 }
 
+function mFieldProjectionPanel() {
+  const p = mFieldProjection();
+  const rows = [
+    ["Scalar / mass mode", p.scalar, "#66e9b4"],
+    ["Vector / EM mode", p.vector, "#b48cff"],
+    ["Tensor / metric mode", p.tensor, "#f4ce68"]
+  ];
+  return `<section class="collision-explanation"><div class="collider-controls-title">Phase-to-Spin Projection</div><p>The i-phase redistributes the visible 3D projection; it does not turn one literal spin into another.</p>${rows.map(([label, value, color]) => `<div style="display:grid;grid-template-columns:1fr auto;gap:6px;margin:8px 0 3px"><span>${label}</span><strong>${Math.round(value * 100)}%</strong></div><div style="height:5px;background:#10242d;border-radius:9px;overflow:hidden"><div style="height:100%;width:${(value * 100).toFixed(1)}%;background:${color}"></div></div>`).join("")}<small>i-coupling ${(p.coupling * 100).toFixed(0)}% · leakage Im(s) ${(p.leakage * 100).toFixed(0)}% · coherence ${(p.coherence * 100).toFixed(0)}%</small></section>`;
+}
+
+function matrixPassageExplanation() {
+  const probe = {
+    photon: ["Photon", "refraction and phase shift", "The ray bends slightly while crossing the effective M-field."],
+    electron: ["Electron", "potential deflection", "The charged probe follows the strongest curved trajectory in the displayed field."],
+    neutrino: ["Neutrino", "phase delay", "The path remains nearly straight; the visible response is an exaggerated phase marker."],
+    atom: ["Neutral atom", "energy-level shift", "The trajectory is weakly perturbed and the orbit marker changes scale in the field."]
+  }[state.values.probeType] || ["Probe", "effective response", "Choose a probe interaction."];
+  const mode = {
+    scalar: ["Scalar M-quant", "a localized phase and effective-mass response is sampled within the bounded 3D volume."],
+    vector: ["Vector M-quant", "the field supplies a direction-dependent effective response, shown as the strongest probe deflection."],
+    standing: ["Distributed M-wave", "the field is a standing spatial mode: a probe couples to a distributed amplitude rather than to individual lattice dots."]
+  }[state.values.mMode] || ["M-field", "Choose a field mode."];
+  return `<section class="collision-explanation"><div class="collider-controls-title">3D M-field passage · educational hypothesis</div><strong>${mode[0]}</strong><p>${mode[1]}</p><strong>${probe[0]}: ${probe[1]}</strong><p>${probe[2]}</p><small>The probe moves only through ordinary x, y, z space. The grid is a 3D sampling of a bounded M-field; it is not a set of visible 4D particles and no claim of a new interaction is made.</small></section>`;
+  return `<section class="collision-explanation"><div class="collider-controls-title">M-field passage · educational hypothesis</div><strong>${probe[0]}: ${probe[1]}</strong><p>${probe[2]}</p><small>This is a qualitative effective-medium demonstration for the proposed lattice, not an experimentally established 4D interaction.</small></section>`;
+}
+
+function phaseDemoExplanation() {
+  const p = mFieldProjection();
+  const scenario = p.tensor > p.vector && p.tensor > p.scalar
+    ? ["Tensor / metric mode", "Two compact test bodies enter the bounded 3D field and follow visibly converging effective trajectories."]
+    : p.vector > p.scalar
+    ? ["Vector / magnetic mode", "Two magnetic dipoles demonstrate an effective attraction or repulsion inside the field volume."]
+    : p.scalar > .45
+    ? ["Scalar / mass mode", "A local two-body bound system breathes as its effective binding and mass response are modulated."]
+    : ["Mixed projection", "The scene combines scalar, vector and metric-like responses in a single explicitly hypothetical visualization."];
+  return `<section class="collision-explanation"><div class="collider-controls-title">Phase demonstration</div><strong>${scenario[0]}</strong><p>${scenario[1]}</p><small>These are qualitative effective-field analogies, not simulations of a new fundamental interaction or general relativity.</small></section>`;
+}
+
 function runInteraction() {
-  if (state.selected.interaction === "collision" && state.solverResult?.state?.supported === false) {
+  const matrixPassage = state.selected.visual === "complexSpin" && state.values.configuration === "lattice" && state.view === "passage";
+  const phaseDemo = state.selected.visual === "complexSpin" && state.values.configuration === "lattice" && state.view === "phaseDemo";
+  const collisionMode = Boolean(state.collisionContext && isBaryonModel(state.selected));
+  if ((state.selected.interaction === "collision" || collisionMode) && state.solverResult?.state?.supported === false) {
     setStatus(`НЕПОДДЕРЖИВАЕМАЯ ПАРА · ${state.solverResult.state.reason}`, false);
     return;
   }
-  state.interaction = state.selected.interaction;
+  state.interaction = phaseDemo ? "phaseDemo" : matrixPassage ? "matrixPassage" : collisionMode ? "collision" : state.selected.interaction;
   state.interactionTime = 0;
   state.interactionPhase = null;
   disposeGroup(effects);
-  if (state.interaction === "photon") buildPhotonEffect();
+  if (state.interaction === "phaseDemo") buildPhaseProjectionDemo();
+  else if (state.interaction === "matrixPassage") buildMatrixPassageEffect();
+  else if (state.interaction === "photon") buildPhotonEffect();
   else if (state.interaction === "weak") buildWeakEffect();
   else if (state.interaction === "neutrino") buildNeutrinoPulse();
   else if (state.interaction === "eos") buildCompressionEffect();
@@ -1290,8 +1820,84 @@ function runInteraction() {
   else if (state.interaction === "stringBreak") buildStringBreakingEffect();
   else if (state.interaction === "collision") buildCollisionEffect();
   else buildBosonEffect();
+  if (state.interaction === "collision") renderInspector();
   setStatus(interactionStatusText(state.interaction), true);
   $("#telemetryState").textContent = state.solverResult?.event?.process || state.interaction;
+}
+
+function buildPhaseProjectionDemo() {
+  const p = mFieldProjection();
+  const addTrail = (points, color, opacity = .7) => {
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({ color, transparent: true, opacity }));
+    effects.add(line);
+    return line;
+  };
+  if (p.tensor > p.vector && p.tensor > p.scalar) {
+    const leftCurve = new THREE.CatmullRomCurve3([new THREE.Vector3(-7, -1.9, .5), new THREE.Vector3(-2.4, -1.1, .2), new THREE.Vector3(-.4, -.15, 0)]);
+    const rightCurve = new THREE.CatmullRomCurve3([new THREE.Vector3(7, 1.9, -.5), new THREE.Vector3(2.4, 1.1, -.2), new THREE.Vector3(.4, .15, 0)]);
+    const left = makeSphere(.62, new THREE.MeshStandardMaterial({ color: 0x627fbd, roughness: .42, metalness: .35 }), leftCurve.getPointAt(0).toArray(), 28);
+    const right = makeSphere(.62, new THREE.MeshStandardMaterial({ color: 0x7d90b5, roughness: .42, metalness: .35 }), rightCurve.getPointAt(0).toArray(), 28);
+    tagComponent(left, "macroBody", { role: "test body A", interaction: "effective tensor / metric mode" });
+    tagComponent(right, "macroBody", { role: "test body B", interaction: "effective tensor / metric mode" });
+    effects.add(left, right);
+    addTrail(leftCurve.getPoints(90), 0xf4ce68, .66);
+    addTrail(rightCurve.getPoints(90), 0xf4ce68, .66);
+    animated.push({ type: "metricPair", left, right, leftCurve, rightCurve });
+    return;
+  }
+  if (p.vector > p.scalar) {
+    const left = makeSphere(.76, new THREE.MeshStandardMaterial({ color: 0xe26b6b, emissive: 0x5c1010, emissiveIntensity: .7, roughness: .32 }), [-4.4, 0, 0], 28);
+    const right = makeSphere(.76, new THREE.MeshStandardMaterial({ color: 0x5e8fe4, emissive: 0x0d2058, emissiveIntensity: .7, roughness: .32 }), [4.4, 0, 0], 28);
+    const fieldA = new THREE.Mesh(new THREE.TorusGeometry(1.16, .022, 8, 72), new THREE.MeshBasicMaterial({ color: 0xb48cff, transparent: true, opacity: .72 }));
+    const fieldB = fieldA.clone();
+    fieldA.position.copy(left.position); fieldB.position.copy(right.position);
+    fieldA.rotation.y = Math.PI / 2; fieldB.rotation.y = Math.PI / 2;
+    tagComponent(left, "magneticDipole", { role: "north-south dipole A", interaction: "effective vector mode" });
+    tagComponent(right, "magneticDipole", { role: "north-south dipole B", interaction: "effective vector mode" });
+    effects.add(left, right, fieldA, fieldB);
+    addTrail([left.position.clone(), new THREE.Vector3(0, .7, 0), right.position.clone()], 0xb48cff, .82);
+    animated.push({ type: "magneticPair", left, right, fieldA, fieldB });
+    return;
+  }
+  const left = makeSphere(.62, new THREE.MeshStandardMaterial({ color: 0x67e9b0, emissive: 0x0f593e, emissiveIntensity: .72, roughness: .32 }), [-3.7, 0, 0], 28);
+  const right = makeSphere(.62, new THREE.MeshStandardMaterial({ color: 0x67e9b0, emissive: 0x0f593e, emissiveIntensity: .72, roughness: .32 }), [3.7, 0, 0], 28);
+  const link = addTrail([left.position.clone(), new THREE.Vector3(), right.position.clone()], 0x66e9b4, .82);
+  tagComponent(left, "boundProbe", { role: "bound system A", interaction: "effective scalar / mass mode" });
+  tagComponent(right, "boundProbe", { role: "bound system B", interaction: "effective scalar / mass mode" });
+  effects.add(left, right);
+  animated.push({ type: "scalarPair", left, right, link });
+}
+
+function buildMatrixPassageEffect() {
+  const probeType = state.values.probeType || "photon";
+  const modes = mFieldProjection();
+  const settings = {
+    photon: { color: 0xf7c652, bend: .8, radius: .11, label: "photon · refracted through M-field" },
+    electron: { color: 0xb28cff, bend: 1.65, radius: .14, label: "electron · deflected by M-field" },
+    neutrino: { color: 0x54d8ff, bend: .13, radius: .09, label: "neutrino · phase-shifted through M-field" },
+    atom: { color: 0x63df9b, bend: .45, radius: .17, label: "atom · energy shift in M-field" }
+  }[probeType];
+  const points = [];
+  for (let index = 0; index <= 120; index += 1) {
+    const progress = index / 120;
+    const x = THREE.MathUtils.lerp(-7.4, 7.4, progress);
+    const vectorBend = .28 + modes.vector * 1.45;
+    const tensorBend = modes.tensor * .48 * Math.sin(Math.PI * progress * 2);
+    const y = settings.bend * (vectorBend + tensorBend) * Math.sin(Math.PI * progress) * (probeType === "electron" ? Math.sin(Math.PI * progress) : 1);
+    const z = (probeType === "photon" ? .35 * Math.sin(Math.PI * progress * 2) : probeType === "atom" ? .2 * Math.sin(Math.PI * progress) : 0)
+      + modes.tensor * .26 * Math.sin(Math.PI * progress * 2) + modes.scalar * .1 * Math.sin(Math.PI * progress * 5);
+    points.push(new THREE.Vector3(x, y, z));
+  }
+  const curve = new THREE.CatmullRomCurve3(points);
+  const trail = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({ color: settings.color, transparent: true, opacity: .66 }));
+  tagComponent(trail, probeType === "neutrino" ? "neutrino" : probeType, { role: settings.label, medium: "bounded 3D M-field / phase-to-spin projection" });
+  const probe = makeSphere(settings.radius, new THREE.MeshBasicMaterial({ color: settings.color }), points[0].toArray(), 16);
+  tagComponent(probe, probeType === "neutrino" ? "neutrino" : probeType, { role: settings.label, medium: "bounded 3D M-field / phase-to-spin projection" });
+  const phaseRing = new THREE.Mesh(new THREE.TorusGeometry(.34, .025, 8, 40), new THREE.MeshBasicMaterial({ color: settings.color, transparent: true, opacity: .72 }));
+  phaseRing.rotation.x = Math.PI / 2;
+  phaseRing.visible = probeType === "neutrino" || probeType === "atom" || modes.scalar > .42;
+  effects.add(trail, probe, phaseRing);
+  animated.push({ type: "matrixProbe", object: probe, curve, trail, phaseRing, probeType, settings, phase: 0 });
 }
 
 function buildPhotonEffect() {
@@ -1427,6 +2033,15 @@ function buildCollisionEffect() {
   flash.scale.setScalar(.01);
   effects.add(flash);
   animated.push({ type: "collisionFlash", object: flash, phase: 0 });
+  if (event.mode === "annihilation") {
+    for (let i = 0; i < 3; i += 1) {
+      const wave = new THREE.Mesh(new THREE.TorusGeometry(.22, .035, 8, 96), new THREE.MeshBasicMaterial({ color: 0xffe58a, transparent: true, opacity: .9, blending: THREE.AdditiveBlending }));
+      wave.rotation.set(Math.PI / 2 + i * .62, i * .7, 0);
+      wave.visible = false;
+      effects.add(wave);
+      animated.push({ type: "annihilationWave", object: wave, delay: i * .11 });
+    }
+  }
   event.tracks.forEach((track, index) => {
     const points = collisionTrackPoints(track, event.magneticField || 0);
     const color = track.type === "photon" ? 0xf7c652 : track.type === "muon" ? 0xee72d5 : track.type === "electron" ? 0x6da2ff : track.type === "positron" ? 0xf2bf5b : track.type === "neutralHadron" ? 0x8da7ae : track.charge > 0 ? 0x63df9b : 0x6da2ff;
@@ -1435,11 +2050,12 @@ function buildCollisionEffect() {
     geometry.setDrawRange(0, 0);
     const line = new THREE.Line(geometry, material);
     const component = track.type === "photon" ? "photon" : track.type === "muon" ? "muon" : track.type === "electron" ? "electron" : track.type === "positron" ? "positron" : track.type === "neutralHadron" ? "neutralHadron" : "chargedHadron";
-    const eventProduct = track.type === "chargedHadron" ? `outgoing charged-hadron candidate, q=${track.charge > 0 ? "+" : "−"}e` : track.type === "neutralHadron" ? "outgoing neutral-hadron candidate" : track.type === "muon" ? `outgoing ${track.charge > 0 ? "μ+" : "μ−"}` : track.type === "electron" ? "outgoing e−" : track.type === "positron" ? "outgoing e+" : "outgoing photon";
-    tagComponent(line, component, { momentum: track.momentum, charge: track.charge, displaced: track.displaced, eventProduct });
+    const annihilationPhoton = event.mode === "annihilation" && track.type === "photon";
+    const eventProduct = track.type === "chargedHadron" ? `outgoing charged-hadron candidate, q=${track.charge > 0 ? "+" : "−"}e` : track.type === "neutralHadron" ? "outgoing neutral-hadron candidate" : track.type === "muon" ? `outgoing ${track.charge > 0 ? "μ+" : "μ−"}` : track.type === "electron" ? "outgoing e−" : track.type === "positron" ? "outgoing e+" : annihilationPhoton ? `annihilation photon γ, E ≈ ${track.momentum.toFixed(2)} GeV` : "outgoing photon";
+    tagComponent(line, component, { momentum: track.momentum, charge: track.charge, displaced: track.displaced, eventProduct, annihilationPhoton });
     effects.add(line);
     const marker = makeSphere(track.primary ? .12 : .065, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .92 }), points[0].toArray(), 10);
-    tagComponent(marker, component, { momentum: track.momentum, charge: track.charge, eventProduct });
+    tagComponent(marker, component, { momentum: track.momentum, charge: track.charge, eventProduct, annihilationPhoton });
     marker.visible = false;
     effects.add(marker);
     animated.push({ type: "collisionTrack", object: line, marker, points, delay: index * .012, phase: 0 });
@@ -1448,19 +2064,21 @@ function buildCollisionEffect() {
     const marker = makeSphere(.16, mats.helicity, vertex, 14);
     marker.visible = false;
     tagComponent(marker, "colliderDetector", { layer: "displaced vertex" });
+    marker.userData.pickable = false;
     effects.add(marker);
     animated.push({ type: "displacedVertex", object: marker, phase: 0 });
   }
 }
 
 function interactionStatusText(type) {
+  if (type === "phaseDemo") return "PHASE-TO-SPIN PROJECTION · qualitative 3D demonstration";
   if (type === "photon") {
     const event = state.solverResult?.event;
     if (event?.process === "ionization") return `PHOTOIONIZATION · Eγ − Eion = ${event.electronEnergy.toFixed(2)} eV`;
     if (event?.process === "excitation") return `PHOTOEXCITATION · 1s → n=${event.targetN}`;
     return "RAYLEIGH SCATTERING · photon is off resonance";
   }
-  return ({ weak: "WEAK VERTEX · d → u + W⁻", neutrino: "HYPOTHETICAL LENS · integrating i dψ/dx = Hψ", eos: "EOS SWEEP · P(ε) recalculated", stability: "FINITE SIZE · E/A scan", binding: "TWO-BARYON CHANNEL · V(r) and binding estimate", stringBreak: "QCD STRING · κr grows until q-q̄ pair creation", collision: `COLLISION · ${state.solverResult?.state?.processLabel || "event generator"} · HepMC-ready`, boson: "GLUON FIELD · color exchange" })[type] || "Вычисление";
+  return ({ weak: "WEAK VERTEX · d → u + W⁻", neutrino: "HYPOTHETICAL LENS · integrating i dψ/dx = Hψ", eos: "EOS SWEEP · P(ε) recalculated", stability: "FINITE SIZE · E/A scan", binding: "TWO-BARYON CHANNEL · V(r) and binding estimate", stringBreak: "QCD STRING · κr grows until q-q̄ pair creation", collision: `COLLISION · ${state.solverResult?.state?.processLabel || "event generator"} · HepMC-ready`, matrixPassage: "M-FIELD PASSAGE · qualitative probe response", boson: "GLUON FIELD · color exchange" })[type] || "Вычисление";
 }
 
 function setStatus(text, active) {
@@ -1506,7 +2124,7 @@ function pickSceneComponent(event) {
   for (const hit of hits) {
     let object = hit.object;
     while (object && !object.userData.componentId) object = object.parent;
-    if (object?.userData.componentId) {
+    if (object?.userData.componentId && object.userData.pickable !== false) {
       showComponentInfo(object);
       return;
     }
@@ -1534,8 +2152,101 @@ function updateAnimations(time, dt) {
   }
   for (const item of animated) {
     const t = time * speed;
-    if (!item.object?.parent) continue;
-    if (item.type === "quark") {
+    if (item.object && !item.object.parent) continue;
+    if (item.core && !item.core.parent) continue;
+    if (item.type === "metricPair") {
+      const progress = Math.min(1, state.interactionTime * .12);
+      item.left.position.copy(item.leftCurve.getPointAt(progress));
+      item.right.position.copy(item.rightCurve.getPointAt(progress));
+      item.left.scale.setScalar(1 + .08 * Math.sin(t * 2));
+      item.right.scale.setScalar(1 + .08 * Math.sin(t * 2 + Math.PI));
+    } else if (item.type === "magneticPair") {
+      const separation = 4.4 - .75 * Math.sin(state.interactionTime * .42) ** 2;
+      item.left.position.x = -separation;
+      item.right.position.x = separation;
+      item.fieldA.position.copy(item.left.position);
+      item.fieldB.position.copy(item.right.position);
+      item.fieldA.rotation.z += dt * .55;
+      item.fieldB.rotation.z -= dt * .55;
+    } else if (item.type === "scalarPair") {
+      const distance = 3.7 - .48 * Math.sin(state.interactionTime * .72) ** 2;
+      item.left.position.x = -distance;
+      item.right.position.x = distance;
+      item.left.scale.setScalar(1 + .18 * Math.sin(t * 2.4));
+      item.right.scale.setScalar(1 + .18 * Math.sin(t * 2.4));
+      item.link.geometry.setFromPoints([item.left.position.clone(), new THREE.Vector3(), item.right.position.clone()]);
+    } else if (item.type === "matrixProbe") {
+      const progress = (state.interactionTime * .24) % 1;
+      item.object.position.copy(item.curve.getPointAt(progress));
+      item.object.scale.setScalar(1 + .18 * Math.sin(t * 5));
+      item.trail.material.opacity = .42 + .22 * Math.sin(t * 2.6) ** 2;
+      item.phaseRing.position.copy(item.object.position);
+      item.phaseRing.rotation.z += dt * (item.probeType === "neutrino" ? 3.5 : 1.6);
+      item.phaseRing.scale.setScalar(.8 + .28 * Math.sin(t * 6) ** 2);
+    } else if (item.type === "complexSpin" || item.type === "complexSpinLattice") {
+      const projection = complexSpinProjection();
+      const visiblePosition = projection.axes.map((axis) => projection.coordinates[axis]);
+      const sliceRadius = projection.sliceRadius;
+      const origin = new THREE.Vector3(visiblePosition[0] * 1.55, visiblePosition[1] * 1.55, visiblePosition[2] * 1.55);
+      if (item.type === "complexSpinLattice") {
+        // This scene represents a bounded M-field inside ordinary x,y,z space.
+        // Do not let hidden-coordinate sliders move this experimental volume.
+        origin.set(0, 0, 0);
+        const matrix = new THREE.Matrix4();
+        const modes = mFieldProjection();
+        // Small dots and wide gaps make the macroscopic field extent legible.
+        const scale = .028 + .019 * modes.scalar + .024 * modes.vector + .031 * modes.tensor;
+        item.offsets.forEach((offset, index) => {
+          matrix.compose(origin.clone().add(offset), new THREE.Quaternion(), new THREE.Vector3(scale, scale, scale));
+          item.lattice.setMatrixAt(index, matrix);
+        });
+        item.lattice.instanceMatrix.needsUpdate = true;
+        item.lattice.visible = true;
+        item.lattice.material.opacity = Math.max(.12, .22 + modes.coherence * .32 - modes.leakage * .15);
+        item.lattice.material.color.set(modes.tensor > modes.vector && modes.tensor > modes.scalar ? 0xf4ce68 : modes.vector > modes.scalar ? 0xb48cff : 0x66e9b4);
+        const passageMode = state.view === "passage" || state.view === "phaseDemo";
+        item.fieldVolume.position.copy(origin);
+        item.fieldEdges.position.copy(origin);
+        item.fieldVolume.visible = passageMode;
+        item.fieldEdges.visible = passageMode;
+        item.fieldVolume.material.opacity = .015 + modes.coherence * .05;
+        item.fieldEdges.material.opacity = .14 + modes.coherence * .28;
+      } else {
+        item.core.position.copy(origin);
+        item.core.visible = sliceRadius > .002;
+        item.core.scale.setScalar(Math.max(.0001, sliceRadius));
+        item.core.material.opacity = sliceRadius > .002 ? .14 + sliceRadius * .81 : 0;
+      }
+      // This arrow denotes the fixed i-axis, rather than a physical 3D
+      // precession trajectory.  Keeping it stationary makes the projection
+      // reference frame legible while the hypersphere itself changes slice.
+      if (item.spinArrow) {
+        item.spinArrow.setDirection(new THREE.Vector3(0, 1, 0));
+        item.spinArrow.position.copy(origin);
+        item.spinArrow.visible = projection.axes.includes("i") && sliceRadius > .06;
+        item.spinArrow.setLength(.22 + sliceRadius * 2.2, .28, .14);
+      }
+    } else if (item.type === "tesseract") {
+      const positions = item.geometry.attributes.position.array;
+      if (state.values.tesseractMode === "projection") {
+        TESSERACT_EDGES.forEach(([from, to], edge) => {
+          positions.set(projectTesseractVertex(TESSERACT_VERTICES[from]), edge * 6);
+          positions.set(projectTesseractVertex(TESSERACT_VERTICES[to]), edge * 6 + 3);
+        });
+        item.geometry.setDrawRange(0, TESSERACT_EDGES.length * 2);
+        item.object.visible = true;
+      } else {
+        const slice = tesseractSliceSegments();
+        slice.segments.forEach(([start, end], edge) => {
+          positions.set(start, edge * 6);
+          positions.set(end, edge * 6 + 3);
+        });
+        item.geometry.setDrawRange(0, slice.segments.length * 2);
+        item.object.visible = slice.segments.length > 0;
+      }
+      item.geometry.attributes.position.needsUpdate = true;
+      item.geometry.computeBoundingSphere();
+    } else if (item.type === "quark") {
       const inertia = item.object.userData.componentId === "strangeQuark" ? 1.18 - visual.strangeMass * .38 : 1;
       const amplitude = (.045 + .065 * visual.motionAmplitude) * inertia;
       item.object.position.copy(item.base).add(new THREE.Vector3(Math.sin(t * .75 + item.phase), Math.cos(t * .9 + item.phase), Math.sin(t * .55 + item.phase)).multiplyScalar(amplitude));
@@ -1576,6 +2287,27 @@ function updateAnimations(time, dt) {
         item.pairFlash.material.opacity = Math.max(0, .8 - breakProgress * 1.2);
         item.pairFlash.scale.setScalar(.35 + breakProgress * 2.2);
       }
+    } else if (item.type === "baryonConfinement") {
+      const pull = clamp(state.interactionTime / 2.25, 0, 1);
+      const eased = pull * pull * (3 - 2 * pull);
+      item.object.position.copy(item.origin).lerp(item.final, eased);
+      item.mainFlux.visible = state.interaction === "baryonConfinement" && pull < .88;
+      if (item.mainFlux.visible) orientCylinderBetween(item.mainFlux, item.origin, item.object.position);
+      const pair = clamp((state.interactionTime - 1.65) / .7, 0, 1);
+      const pairEased = pair * pair * (3 - 2 * pair);
+      const pairCenter = item.origin.clone().lerp(item.object.position, .55);
+      item.createdQ.position.copy(pairCenter).lerp(pairCenter.clone().add(new THREE.Vector3(-.32, .42, 0)), pairEased);
+      item.createdAnti.position.copy(pairCenter).lerp(pairCenter.clone().add(new THREE.Vector3(.32, -.42, 0)), pairEased);
+      item.createdQ.visible = item.createdAnti.visible = pair > .02;
+      item.flash.position.copy(pairCenter);
+      item.flash.material.opacity = pair > 0 && pair < 1 ? .58 * Math.sin(pair * Math.PI) : .06;
+      item.flash.scale.setScalar(.35 + pair * 1.9);
+      item.coreFlux.visible = item.mesonFlux.visible = pair > .72;
+      if (pair > .72) {
+        orientCylinderBetween(item.coreFlux, item.origin, item.createdQ.position);
+        orientCylinderBetween(item.mesonFlux, item.createdAnti.position, item.object.position);
+      }
+      item.baryonLabel.visible = item.mesonLabel.visible = pair > .88;
     } else if (item.type === "electron") {
       const event = state.interaction === "photon" && item.electronIndex === 0 ? state.solverResult?.event : null;
       if (event?.process === "ionization" && state.interactionTime > 1.05) {
@@ -1621,6 +2353,12 @@ function updateAnimations(time, dt) {
     } else if (item.type === "ring") {
       item.object.rotation.y += dt * item.speed;
       item.object.rotation.z += dt * item.speed * .45;
+    } else if (item.type === "macroSpin") {
+      item.object.rotation.y += dt * item.speed * (item.direction ?? 1);
+    } else if (item.type === "blackHole") {
+      item.photonRing.rotation.z += dt * .34;
+      item.lensedBand.rotation.z += dt * .09;
+      item.jets.forEach((jet, index) => { jet.material.opacity = .14 + Math.sin(t * 1.8 + index * Math.PI) * .045; });
     } else if (item.type === "beam") {
       const x = -8.5 + ((t * 2.4) % 17);
       item.object.position.x = x;
@@ -1721,6 +2459,11 @@ function updateAnimations(time, dt) {
       const phase = clamp((state.interactionTime - 1.05) / .75, 0, 1);
       item.object.visible = state.interactionTime >= 1.05 && state.interactionTime < 2;
       item.object.scale.setScalar(.15 + Math.sin(phase * Math.PI) * 5.5);
+    } else if (item.type === "annihilationWave") {
+      const phase = clamp((state.interactionTime - 1.04 - item.delay) / 1.25, 0, 1);
+      item.object.visible = phase > 0 && phase < 1;
+      item.object.scale.setScalar(.3 + phase * 20);
+      item.object.material.opacity = Math.max(0, .85 * (1 - phase));
     } else if (item.type === "collisionTrack") {
       const reveal = clamp((state.interactionTime - 1.18 - item.delay) / 1.75, 0, 1);
       const count = Math.max(0, Math.floor(reveal * item.points.length));
@@ -1740,6 +2483,14 @@ function updateAnimations(time, dt) {
     if (state.interactionPhase !== phase) {
       state.interactionPhase = phase;
       setStatus(phase === "hadronization" ? "STRING BREAKING · vacuum q-q̄ pair · two color singlets" : `CONFINEMENT · κr растёт · порог ${event?.thresholdDistance.toFixed(2)} fm`, true);
+      $("#telemetryState").textContent = phase;
+    }
+  }
+  if (state.interaction === "baryonConfinement") {
+    const phase = state.interactionTime < 1.65 ? "stretching colour flux" : state.interactionTime < 2.35 ? "vacuum q q̄ pair creation" : "two colour-neutral hadrons";
+    if (state.interactionPhase !== phase) {
+      state.interactionPhase = phase;
+      setStatus(`CONFINEMENT · ${phase}`, true);
       $("#telemetryState").textContent = phase;
     }
   }
@@ -1995,7 +2746,48 @@ $("#viewModes").addEventListener("click", (event) => {
   state.view = button.dataset.view;
   $$("#viewModes button").forEach((item) => item.classList.toggle("active", item === button));
   applyViewMode();
-  if (state.view === "interaction") runInteraction();
+  if (["collision", "annihilation"].includes(state.view) && isBaryonModel(state.selected)) {
+    const baryon = state.selected.id;
+    const selectedMode = state.view;
+    state.collisionContext = {
+      beamA: baryon,
+      beamB: selectedMode === "annihilation" ? BARYON_PARTNERS[baryon] : baryon,
+      processMode: selectedMode === "annihilation" ? "annihilation" : "softQCD",
+      beamEnergy: .25,
+      hardScale: 90,
+      eventSeed: 2401,
+      detectorField: 3.8
+    };
+    runLocalSolver();
+    rebuildSpecimen();
+    renderInspector();
+    runInteraction();
+  } else {
+    const leftBaryonCollider = Boolean(state.collisionContext && isBaryonModel(state.selected));
+    if (leftBaryonCollider) {
+      state.collisionContext = null;
+      state.interaction = null;
+      runLocalSolver();
+      rebuildSpecimen();
+      renderInspector();
+    }
+    if (state.view === "interaction") {
+      runInteraction();
+    } else if (state.view === "phaseDemo" && state.selected.visual === "complexSpin") {
+      state.interaction = null;
+      renderInspector();
+      runInteraction();
+    } else if (state.view === "passage" && state.selected.visual === "complexSpin") {
+      state.interaction = null;
+      renderInspector();
+      setStatus("M-FIELD MATRIX · choose a probe interaction and run it", false);
+    } else if (state.view === "confinement" && isBaryonModel(state.selected)) {
+      state.confinementPulled = false;
+      rebuildSpecimen();
+      renderInspector();
+      setStatus("CONFINEMENT · select a valence quark and pull it", false);
+    }
+  }
 });
 window.addEventListener("resize", resize);
 window.addEventListener("keydown", (event) => { if (event.key === "Escape") hideComponentInfo(); });

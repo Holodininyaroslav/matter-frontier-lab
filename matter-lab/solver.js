@@ -79,6 +79,10 @@ function addBalancedSoftTracks(tracks, random, pairs, momentumScale = 2.2) {
 const COLLIDER_BEAMS = {
   proton: { label: "p", pdg: 2212, kind: "hadron", charge: 1 },
   antiproton: { label: "p̄", pdg: -2212, kind: "hadron", charge: -1 },
+  neutron: { label: "n", pdg: 2112, kind: "hadron", charge: 0, conjugate: "antineutron" },
+  antineutron: { label: "n̄", pdg: -2112, kind: "hadron", charge: 0, conjugate: "neutron" },
+  hyperon: { label: "Λ", pdg: 3122, kind: "hadron", charge: 0, conjugate: "antihyperon" },
+  antihyperon: { label: "Λ̄", pdg: -3122, kind: "hadron", charge: 0, conjugate: "hyperon" },
   pionPlus: { label: "π⁺", pdg: 211, kind: "hadron", charge: 1 },
   pionMinus: { label: "π⁻", pdg: -211, kind: "hadron", charge: -1 },
   electron: { label: "e⁻", pdg: 11, kind: "lepton", charge: -1, conjugate: "positron" },
@@ -95,8 +99,9 @@ function resolveWorkbench(v) {
   let allowed = [];
   let automatic = null;
   if (beamA.kind === "hadron" && beamB.kind === "hadron") {
-    allowed = ["softQCD", "hardQCD"];
-    automatic = "softQCD";
+    const conjugatePair = beamA.conjugate === v.beamB || beamB.conjugate === v.beamA || (v.beamA === "proton" && v.beamB === "antiproton") || (v.beamA === "antiproton" && v.beamB === "proton");
+    allowed = conjugatePair ? ["annihilation", "softQCD", "hardQCD"] : ["softQCD", "hardQCD"];
+    automatic = conjugatePair ? "annihilation" : "softQCD";
   } else if ((beamA.kind === "lepton" && beamB.kind === "hadron") || (beamA.kind === "hadron" && beamB.kind === "lepton")) {
     allowed = ["dis"];
     automatic = "dis";
@@ -112,7 +117,7 @@ function resolveWorkbench(v) {
   }
   const supported = Boolean(automatic);
   const mode = requested === "auto" || !allowed.includes(requested) ? automatic : requested;
-  const processLabel = ({ softQCD: "Soft QCD / minimum-bias", hardQCD: "Hard QCD / dijet", annihilation: "γ*/Z annihilation", dis: "deep-inelastic scattering", photoproduction: "photoproduction", pairProduction: "γγ pair production" })[mode] || "unsupported beam pair";
+  const processLabel = ({ softQCD: "Soft QCD / minimum-bias", hardQCD: "Hard QCD / dijet", annihilation: beamA.kind === "hadron" ? "baryon–antibaryon annihilation → radiative energy release" : "γ*/Z annihilation", dis: "deep-inelastic scattering", photoproduction: "photoproduction", pairProduction: "γγ pair production" })[mode] || "unsupported beam pair";
   return {
     supported,
     mode,
@@ -180,6 +185,15 @@ function solveCollision(v, model, points) {
     tracks.push(collisionTrack("muon", 1, phi, theta, momentum, [0, 0, 0], { primary: true }));
     tracks.push(collisionTrack("muon", -1, phi + PI, PI - theta, momentum, [0, 0, 0], { primary: true }));
     addBalancedSoftTracks(tracks, random, 4, 1.1);
+  } else if (mode === "annihilation" && setup.beamA.kind === "hadron") {
+    const phi = random() * 2 * PI;
+    const energy = Math.max(.3, beamEnergy * 1.8);
+    // The display deliberately uses an idealised radiative channel: the energy
+    // leaves as photon wavefronts, not as misleading generic hadron tracks.
+    for (let i = 0; i < 6; i += 1) {
+      const angle = phi + i * Math.PI / 3;
+      tracks.push(collisionTrack("photon", 0, angle, PI / 2 + (i % 2 ? .18 : -.18), energy / 3, [0, 0, 0], { primary: true, radiative: true }));
+    }
   } else if (mode === "annihilation" || mode === "pairProduction") {
     const phi = random() * 2 * PI;
     const theta = .38 + random() * (PI - .76);

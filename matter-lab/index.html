@@ -16,7 +16,7 @@
     }
   </script>
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
-  <link rel="stylesheet" href="./styles.css?v=20260722e">
+  <link rel="stylesheet" href="./styles.css?v=20260723-macro-fix">
 </head>
 <body>
   <div class="app-shell">
@@ -73,6 +73,7 @@
             <button type="button" data-view="structure" class="active"><i data-lucide="orbit"></i> Структура</button>
             <button type="button" data-view="interaction"><i data-lucide="zap"></i> Взаимодействие</button>
             <button type="button" data-view="field"><i data-lucide="waves"></i> Поле</button>
+            <button type="button" data-view="confinement" hidden><i data-lucide="stretch-horizontal"></i> Confinement</button>
             <button id="communicationViewBtn" class="communication-mode" type="button" hidden><i data-lucide="radio-tower"></i><span>Neutrino Communication</span></button>
           </div>
           <button id="runInteractionBtn" class="primary-action" type="button"><i data-lucide="play"></i><span>Запустить процесс</span></button>
@@ -184,7 +185,7 @@
     </div>
   </div>
 
-  <script type="module" src="./app.js?v=20260723-formula-modal"></script>
-  <script src="./language.js?v=20260723-catalogue"></script>
+<script type="module" src="./app.js?v=20260724-phase-demos"></script>
+<script src="./language.js?v=20260724-phase-demos"></script>
 </body>
 </html>
