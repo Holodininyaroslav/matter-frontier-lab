@@ -1,5 +1,9 @@
 # Matter Frontier Lab
 
+<p align="center">
+  <img src="assets/matter-frontier-lab-avatar.png" alt="Matter Frontier Lab scientific emblem" width="260">
+</p>
+
 **Matter Frontier Lab** is a local-first interactive laboratory for exploring particle physics, dense and exotic matter, collider events, macro-objects, neutrino communication, and educational 4D projections.
 
 It is a visual and computational education project. It clearly distinguishes experimental facts, published theoretical models, catalogue-only entries, and author-defined hypotheses. It is **not** a tool for predicting new particles, designing a neutrino communication device, or replacing validated research pipelines.
@@ -20,7 +24,7 @@ It is a visual and computational education project. It clearly distinguishes exp
 python server.py --port 8892
 ```
 
-Open <http://127.0.0.1:8892/>.
+Then open `http://127.0.0.1:8892/` in the same computer's browser. `127.0.0.1` is the standard loopback address: it never reveals an external IP address and is not reachable from the internet.
 
 On Windows, `start_qcd_neutrino_lab.bat` starts the local server. The `matter-lab/Start-MatterFrontierLab.ps1` and `matter-lab/Matter Frontier Lab Autostart.cmd` helpers are provided for a persistent per-user sign-in launch. They keep restarting the local Python server if it exits.
 
