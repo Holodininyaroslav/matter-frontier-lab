@@ -15,7 +15,7 @@ It is a visual and computational education project. It clearly distinguishes exp
 - A dedicated **Neutrino Communication Lab** inside the Neutrino Lens hypothesis. It compares a photon/EM channel and a neutrino-beam channel crossing rock, with message-to-bits-to-received-message demonstration controls.
 - A collider workbench with transparent detector layers, speed/pause controls, configurable beams, and explanatory event summaries.
 - Macro-object scenes for the Sun, Jupiter, black holes, neutron stars, and compact-object catalogue entries.
-- An orbitable WebGL black-hole view with a lensed accretion disk, photon-ring-inspired features, and a merger-laboratory mode for two or three compact objects. The merger mode is explicitly educational: it visualises an analytic/qualitative inspiral, curvature embedding and gravitational-wave fronts, rather than a numerical-relativity prediction.
+- An orbitable WebGL black-hole view with a lensed accretion disk and photon-ring-inspired features. Its merger laboratory supports wide coplanar initial layouts of 2, 3, 6, or 9 compact objects, including randomised planar orbital layouts, independently adjustable grid transparency, curvature-embedding depth, and gravitational-wave visibility. The merger mode is explicitly educational: it visualises an analytic/qualitative inspiral, curvature embedding and gravitational-wave fronts, rather than a numerical-relativity prediction.
 - A project-hypothesis workspace for a 4D complex-spin quasiparticle, including 3D slices, a tesseract projection, sparse 3D M-field regions, and ordinary-3D probe demonstrations.
 - Per-model scientific notes, equations, scope limitations, and source links.
 
