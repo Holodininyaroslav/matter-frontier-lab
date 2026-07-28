@@ -19,6 +19,18 @@ It is a visual and computational education project. It clearly distinguishes exp
 - A project-hypothesis workspace for a 4D complex-spin quasiparticle, including 3D slices, a tesseract projection, sparse 3D M-field regions, and ordinary-3D probe demonstrations.
 - Per-model scientific notes, equations, scope limitations, and source links.
 
+## Black-hole merger and gravitational-wave laboratory
+
+The **Black-hole merger** mode is an interactive, orbitable educational simulation inside the Black Hole catalogue entry. It is designed to make the following relationships visible:
+
+- Wide, coplanar starting configurations of **2, 3, 6, or 9** black holes, with a button for a new random planar orbital layout.
+- Mass-linked display horizons: changing an input mass changes the corresponding displayed Schwarzschild-radius scale.
+- A continuously contracting inspiral in which every initial black hole remains visible until it reaches the common merger centre; the final displayed remnant uses the sum of the input display masses.
+- A transparent, adjustable spacetime-embedding grid. Its depth can be increased separately from the horizon sizes so that the curvature pattern remains legible even for small, distant bodies.
+- Outgoing, adjustable **gravitational-wave fronts** and a merger flash. These visualise the quadrupolar radiation expected from an inspiral and ringdown in qualitative form.
+
+This browser laboratory is **not a numerical-relativity solver** and does not claim to calculate an astrophysical waveform, horizon dynamics, recoil, or radiated-energy budget. The binary case is an analytic, educational preview; three- and many-body cases are explicitly visual concepts. For quantitative work, the repository links to [Einstein Toolkit](https://einsteintoolkit.org/), its [binary black-hole gallery](https://www.einsteintoolkit.org/gallery/bbh/index.html), and [EinsteinPy](https://docs.einsteinpy.org/en/stable/) as possible traceable back-end/data pathways.
+
 ## Run locally
 
 ```powershell
