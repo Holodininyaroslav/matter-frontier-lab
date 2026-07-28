@@ -32,7 +32,8 @@ const state = {
   confinementChoice: 0,
   confinementPulled: false,
   communicationOpen: false,
-  communicationValues: { neutrinoRate: 80, photonRate: 55, energy: 10, rockThickness: 190, reflectivity: 96 }
+  communicationValues: { neutrinoRate: 80, photonRate: 55, energy: 10, rockThickness: 190, reflectivity: 96 },
+  blackHoleMergerRunning: false
 };
 setCatalogLocale(localStorage.getItem("qcd-neutrino-language") || "en");
 window.qcdLabState = state;
@@ -878,6 +879,226 @@ function loadMacroAsset(model, url, loader, targetSize) {
   }, undefined, () => setStatus("MACRO ASSET UNAVAILABLE · check local files", true));
 }
 
+function createRelativisticBlackHole({ scale = 1, diskTilt = .18, compact = false } = {}) {
+  const group = new THREE.Group();
+  const horizon = new THREE.Mesh(new THREE.SphereGeometry(1.34 * scale, 64, 48), new THREE.ShaderMaterial({
+    transparent: true,
+    uniforms: { rimColor: { value: new THREE.Color(0x5f8da8) }, rimStrength: { value: compact ? .45 : .72 } },
+    vertexShader: "varying vec3 vNormal; varying vec3 vView; void main(){ vNormal=normalize(normalMatrix*normal); vec4 mv=modelViewMatrix*vec4(position,1.0); vView=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }",
+    fragmentShader: "uniform vec3 rimColor; uniform float rimStrength; varying vec3 vNormal; varying vec3 vView; void main(){ float rim=pow(1.0-max(dot(normalize(vNormal),normalize(vView)),0.0),3.2); vec3 c=vec3(0.0)+rimColor*rim*rimStrength; gl_FragColor=vec4(c,0.98); }"
+  }));
+  const photonRing = new THREE.Mesh(new THREE.TorusGeometry(1.53 * scale, .06 * scale, 16, 180), new THREE.MeshBasicMaterial({ color: 0xfff4bf, transparent: true, opacity: .92, blending: THREE.AdditiveBlending, depthWrite: false }));
+  photonRing.rotation.x = Math.PI / 2;
+  group.add(horizon, photonRing);
+  const disk = new THREE.Group();
+  [[1.68, 2.25, 0xfff2bd, .88], [2.18, 3.15, 0xffa143, .74], [3.05, 4.45, 0x8e1f1f, .52]].forEach(([inner, outer, color, opacity], index) => {
+    const layer = new THREE.Mesh(new THREE.RingGeometry(inner * scale, outer * scale, 180, 5), new THREE.MeshBasicMaterial({ color, transparent: true, opacity, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+    layer.rotation.x = -Math.PI / 2;
+    layer.position.y = (index - 1) * .035 * scale;
+    disk.add(layer);
+  });
+  disk.rotation.z = diskTilt;
+  group.add(disk);
+  // A restrained rear image of the disk.  It is kept co-planar with the main
+  // disk rather than using a giant tilted torus, which looked like an unrelated
+  // orbit instead of gravitational lensing.
+  const lensedBand = new THREE.Mesh(new THREE.RingGeometry(2.34 * scale, 3.42 * scale, 160, 2, Math.PI * .12, Math.PI * .82), new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: .33, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+  lensedBand.rotation.x = -Math.PI / 2;
+  lensedBand.rotation.z = diskTilt + Math.PI * .05;
+  lensedBand.position.y = .12 * scale;
+  group.add(lensedBand);
+  return { group, horizon, photonRing, disk, lensedBand };
+}
+
+function createNasaAccretionDiskVisual() {
+  const holder = new THREE.Group();
+  const textureLoader = new THREE.TextureLoader();
+  textureLoader.load("./assets/models/nasa-svs-black-hole-accretion-disk.gif", (texture) => {
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    const diskVisual = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: texture,
+      transparent: false,
+      depthWrite: false,
+      depthTest: false
+    }));
+    // This is NASA SVS simulation ID 13326, not a hand-drawn substitute.
+    // The sprite faces the observer so the supplied edge-on lensing geometry is
+    // preserved instead of being distorted by this laboratory's orbit camera.
+    diskVisual.scale.set(12.2, 7.04, 1);
+    holder.add(diskVisual);
+    animated.push({ type: "nasaAccretionDisk", object: diskVisual, texture });
+    setStatus("NASA SVS ACCRETION-DISK VISUALIZATION · ready", true);
+  }, undefined, () => {
+    const fallback = createRelativisticBlackHole({ scale: 1.08, diskTilt: .2 });
+    fallback.group.rotation.set(.24, -.42, .08);
+    holder.add(fallback.group);
+    animated.push({ type: "blackHole", object: fallback.group, photonRing: fallback.photonRing, lensedBand: fallback.lensedBand, disk: fallback.disk });
+    setStatus("NASA ASSET UNAVAILABLE · procedural fallback", true);
+  });
+  specimen.add(holder);
+  primaryParticles.push(holder);
+  return holder;
+}
+
+// Interactive GPU preview for the catalogue view.  This is deliberately not
+// presented as a numerical-relativity solution: it is a local WebGL rendering
+// guided by the ray-bending, photon-ring and Doppler-beaming treatment in
+// Eric Bruneton's open black-hole shader project.  Unlike the NASA GIF, every
+// component here belongs to the Three.js scene and can be inspected by orbiting
+// the camera.
+function createInteractiveBlackHoleVisual() {
+  const values = state.values;
+  const mass = Math.max(Number(values.mass || 4300000), 3);
+  const diskRadius = clamp(Number(values.diskRadius || 6), 2, 14);
+  // A logarithmic display mapping keeps both stellar and supermassive values
+  // visible while retaining the physical r_s proportionality in the labels.
+  const horizonRadius = clamp(.9 + Math.log10(mass / 3 + 1) * .19, 1.15, 2.25);
+  const outerRadius = horizonRadius * (1.55 + diskRadius * .42);
+  const group = new THREE.Group();
+  // Start near edge-on, where the relativistic far-side image is legible; the
+  // user can still orbit freely through every other viewing angle.
+  group.rotation.set(-.42, -.28, 0);
+
+  const stars = new THREE.BufferGeometry();
+  const starPositions = [];
+  for (let i = 0; i < 520; i += 1) {
+    const radius = rand(9, 24); const theta = rand(0, Math.PI * 2); const y = rand(-8, 8);
+    starPositions.push(Math.cos(theta) * radius, y, Math.sin(theta) * radius);
+  }
+  stars.setAttribute("position", new THREE.Float32BufferAttribute(starPositions, 3));
+  const starField = new THREE.Points(stars, new THREE.PointsMaterial({ color: 0xc9ecff, size: .025, transparent: true, opacity: .56, depthWrite: false }));
+  group.add(starField);
+
+  const horizon = new THREE.Mesh(new THREE.SphereGeometry(horizonRadius, 96, 72), new THREE.ShaderMaterial({
+    uniforms: { rim: { value: new THREE.Color(0x9dd9ff) } }, transparent: true,
+    vertexShader: "varying vec3 n; varying vec3 v; void main(){ n=normalize(normalMatrix*normal); vec4 mv=modelViewMatrix*vec4(position,1.0); v=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }",
+    fragmentShader: "uniform vec3 rim; varying vec3 n; varying vec3 v; void main(){ float f=pow(1.0-max(dot(n,v),0.0),5.0); gl_FragColor=vec4(rim*f*.42, .985); }"
+  }));
+  group.add(horizon);
+
+  const diskUniforms = { time: { value: 0 }, innerRadius: { value: horizonRadius * 1.08 }, outerRadius: { value: outerRadius } };
+  const disk = new THREE.Mesh(new THREE.RingGeometry(horizonRadius * 1.08, outerRadius, 320, 20), new THREE.ShaderMaterial({
+    uniforms: diskUniforms, transparent: true, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false,
+    vertexShader: "varying vec3 p; varying vec2 u; void main(){ p=position; u=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }",
+    fragmentShader: `uniform float time; uniform float innerRadius; uniform float outerRadius; varying vec3 p; varying vec2 u;
+      void main(){ float r=length(p.xy); float q=clamp((r-innerRadius)/(outerRadius-innerRadius),0.,1.); float a=atan(p.y,p.x); float bands=.62+.38*sin(38.*q-7.*a-time*2.1)+.16*sin(104.*q+13.*a-time*4.2); float turbulent=.76+.24*sin(17.*a+q*54.+time*1.7); float approaching=.42+1.15*pow(max(0.,sin(a-.62)),2.4); vec3 hot=mix(vec3(.42,.006,.001),vec3(1.,.12,.008),q); hot=mix(vec3(1.,.93,.55),hot,smoothstep(.0,.32,q)); float fade=smoothstep(1.,.7,q)*smoothstep(.0,.075,q); gl_FragColor=vec4(hot*bands*turbulent*approaching, fade*.96); }`
+  }));
+  disk.rotation.x = -Math.PI / 2;
+  group.add(disk);
+
+  const photonRing = new THREE.Mesh(new THREE.TorusGeometry(horizonRadius * 1.13, horizonRadius * .025, 12, 240), new THREE.MeshBasicMaterial({ color: 0xffefb4, transparent: true, opacity: .96, blending: THREE.AdditiveBlending, depthWrite: false }));
+  photonRing.rotation.x = Math.PI / 2;
+  group.add(photonRing);
+
+  const makeLensedRibbon = (height, width, color, opacity) => {
+    const points = Array.from({ length: 80 }, (_, i) => {
+      const t = -1 + i / 79 * 2;
+      // Keep the secondary image close to the shadow.  Extending it to the
+      // outer disk made it read as an unrelated orbit rather than a lensed
+      // image of the far side of the accretion flow.
+      const x = t * horizonRadius * 1.42;
+      const y = height * (1 - t * t) + .14;
+      const z = .12 + Math.sin(t * Math.PI) * .16;
+      return new THREE.Vector3(x, y, z);
+    });
+    return new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 160, width, 10, false), new THREE.MeshBasicMaterial({ color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false }));
+  };
+  // These two arcs represent the lensed far side and underside of the disk.
+  // They remain part of the 3D object, so their apparent shape changes with
+  // the observer rather than staying fixed as a billboard image.
+  const upperImage = makeLensedRibbon(horizonRadius * .82, horizonRadius * .042, 0xff9a28, .78);
+  const lowerImage = makeLensedRibbon(-horizonRadius * .38, horizonRadius * .026, 0xff3d0d, .18);
+  group.add(upperImage, lowerImage);
+
+  specimen.add(group);
+  primaryParticles.push(group);
+  animated.push({ type: "interactiveBlackHole", group, disk, diskUniforms, photonRing, upperImage, lowerImage, starField });
+  controls.target.set(0, .15, 0);
+  controls.update();
+  setStatus("INTERACTIVE WEBGL ACCRETION-DISK RENDERER · drag to orbit", true);
+}
+
+function createSpacetimeGrid() {
+  const geometry = new THREE.PlaneGeometry(31, 21, 76, 52);
+  const material = new THREE.MeshBasicMaterial({
+    color: 0x65e9ff,
+    wireframe: true,
+    transparent: true,
+    opacity: .34,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  });
+  const grid = new THREE.Mesh(geometry, material);
+  grid.rotation.x = -Math.PI / 2;
+  grid.position.y = -1.15;
+  grid.frustumCulled = false;
+  const base = Float32Array.from(geometry.attributes.position.array);
+  effects.add(grid);
+  return { grid, geometry, base };
+}
+
+function createBlackHoleMerger() {
+  const values = state.values;
+  const count = Number(values.binaryCount || 2);
+  const massA = Number(values.binaryMassA || 36);
+  const massB = Number(values.binaryMassB || 29);
+  const massC = Number(values.binaryMassC || 18);
+  const ratio = clamp(massB / Math.max(massA, 1), .12, 1);
+  const separation = clamp((values.initialSeparation || 28) / 6.2, 2.2, 8.4);
+  // The displayed horizon radius is proportional to Schwarzschild radius and
+  // therefore to mass.  The clamp only protects the framing limits of the lab.
+  const displayRadius = (mass) => clamp(1.12 * mass / 36, .22, 3.4);
+  const a = createRelativisticBlackHole({ scale: displayRadius(massA), diskTilt: .13, compact: true });
+  const b = createRelativisticBlackHole({ scale: displayRadius(massB), diskTilt: -.23, compact: true });
+  a.group.position.set(-separation * .44, 0, 0);
+  b.group.position.set(separation * .56, 0, 0);
+  specimen.add(a.group, b.group);
+  const c = count === 3 ? createRelativisticBlackHole({ scale: displayRadius(massC), diskTilt: .31, compact: true }) : null;
+  if (c) specimen.add(c.group);
+  const remnantMass = massA + massB + (c ? massC : 0);
+  const intermediate = c ? createRelativisticBlackHole({ scale: displayRadius(massA + massB), diskTilt: .04, compact: true }) : null;
+  if (intermediate) {
+    intermediate.group.visible = false;
+    effects.add(intermediate.group);
+  }
+  primaryParticles.push(a.group, b.group);
+  const orbit = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(new THREE.EllipseCurve(0, 0, separation * .54, separation * .21, 0, Math.PI * 2, false, 0).getPoints(160).map((p) => new THREE.Vector3(p.x, 0, p.y))), new THREE.LineBasicMaterial({ color: 0x9cd8e4, transparent: true, opacity: .24 }));
+  specimen.add(orbit);
+  const spacetime = createSpacetimeGrid();
+  // Gravitational radiation is rendered in the plane facing the observer so
+  // the outgoing fronts are legible, not edge-on.  Alternating elongated axes
+  // make the quadrupole nature of a binary source visible without implying a
+  // full numerical-relativity spacetime render.
+  const wave = new THREE.Group();
+  for (let i = 0; i < 12; i += 1) {
+    // WebGL frequently clamps LineBasicMaterial to one physical pixel.  A
+    // narrow emissive tube keeps the wave fronts legible on dense displays.
+    const points = Array.from({ length: 96 }, (_, pointIndex) => {
+      const angle = pointIndex / 96 * Math.PI * 2;
+      return new THREE.Vector3(Math.cos(angle), Math.sin(angle) * (i % 2 ? .56 : .82), .1);
+    });
+    const ring = new THREE.Mesh(
+      new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points, true), 96, .026, 6, true),
+      new THREE.MeshBasicMaterial({ color: i % 2 ? 0xca8cff : 0x65e9ff, transparent: true, opacity: .92, blending: THREE.AdditiveBlending, depthWrite: false })
+    );
+    ring.rotation.z = i % 2 ? Math.PI / 2 : 0;
+    ring.visible = false;
+    wave.add(ring);
+  }
+  const mergerFlash = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0xfaf1bf, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+  mergerFlash.scale.set(0.1, 0.1, 1);
+  wave.add(mergerFlash);
+  wave.userData.mergerFlash = mergerFlash;
+  effects.add(wave);
+  const remnant = createRelativisticBlackHole({ scale: displayRadius(remnantMass), diskTilt: .08, compact: true });
+  remnant.group.visible = false;
+  effects.add(remnant.group);
+  animated.push({ type: "blackHoleMerger", a, b, c, intermediate, remnant, remnantMass, orbit, wave, spacetime, masses: { a: massA, b: massB, c: massC }, separation, count, configuration: values.mergerConfiguration || "quasiCircular" });
+  setStatus("BINARY BLACK-HOLE INITIAL DATA · analytic local preview", true);
+}
+
 function createMacroObject(model) {
   if (model.macroKind === "jupiter") {
     loadMacroAsset(model, "./assets/models/nasa-jupiter.glb", gltfLoader, 6.4);
@@ -908,6 +1129,8 @@ function createMacroObject(model) {
     return;
   }
   if (model.macroKind === "blackHole") {
+    createInteractiveBlackHoleVisual();
+    return;
     const blackHole = new THREE.Group();
     const horizon = new THREE.Mesh(new THREE.SphereGeometry(1.48, 64, 48), new THREE.MeshStandardMaterial({ color: 0x000104, roughness: .15, metalness: .35 }));
     const photonRing = new THREE.Mesh(new THREE.TorusGeometry(1.63, .07, 16, 160), new THREE.MeshBasicMaterial({ color: 0xfff1b5, transparent: true, opacity: .9, blending: THREE.AdditiveBlending }));
@@ -1297,6 +1520,7 @@ function rebuildSpecimen() {
   else if (model.visual === "atom") createAtom(model);
   else if (model.visual === "complexSpin") createComplexSpinQuasiparticle();
   else if (model.visual === "polytope4d") createTesseract();
+  else if (model.id === "blackHole" && state.view === "blackHoleMerger") createBlackHoleMerger();
   else if (model.visual === "macro") createMacroObject(model);
   else if (model.visual === "denseBaryons") createDenseBaryons();
   else if (model.visual === "hybridMatter") createHybridMatter(model);
@@ -1408,15 +1632,21 @@ function renderInspector() {
   const isMFieldRegion = model.visual === "complexSpin" && state.values.configuration === "lattice";
   const matrixPassage = isMFieldRegion && state.view === "passage";
   const phaseDemo = isMFieldRegion && state.view === "phaseDemo";
-  $("#runInteractionBtn").hidden = ["macro", "polytope4d"].includes(model.visual) || (model.visual === "complexSpin" && !matrixPassage && !phaseDemo);
-  $("#runInteractionBtn span").textContent = matrixPassage ? ((localStorage.getItem("qcd-neutrino-language") || "en") === "ru" ? "Запустить зонд" : "Run probe") : interactionLabel(model);
+  const blackHoleMerger = model.id === "blackHole" && state.view === "blackHoleMerger";
+  $("#runInteractionBtn").hidden = (["macro", "polytope4d"].includes(model.visual) && !blackHoleMerger) || (model.visual === "complexSpin" && !matrixPassage && !phaseDemo);
+  const runInteractionLabel = $("#runInteractionBtn span");
+  if (runInteractionLabel) runInteractionLabel.textContent = matrixPassage ? ((localStorage.getItem("qcd-neutrino-language") || "en") === "ru" ? "Запустить зонд" : "Run probe") : interactionLabel(model);
 
-  if (phaseDemo) $("#runInteractionBtn span").textContent = (localStorage.getItem("qcd-neutrino-language") || "en") === "ru" ? "Р—Р°РїСѓСЃС‚РёС‚СЊ РґРµРјРѕРЅСЃС‚СЂР°С†РёСЋ" : "Run demonstration";
+  if (phaseDemo && runInteractionLabel) runInteractionLabel.textContent = (localStorage.getItem("qcd-neutrino-language") || "en") === "ru" ? "Р—Р°РїСѓСЃС‚РёС‚СЊ РґРµРјРѕРЅСЃС‚СЂР°С†РёСЋ" : "Run demonstration";
+  if (blackHoleMerger && runInteractionLabel) runInteractionLabel.textContent = state.blackHoleMergerRunning ? "Restart merger" : "Start merger";
   const visibleParameters = model.parameters.filter((parameter) => {
     const mFieldParameters = ["probeType", "mMode", "iPhase", "iCoupling", "leakage", "projectionCoherence"];
     if (mFieldParameters.includes(parameter.key)) return isMFieldRegion;
     // The 4D projection controls describe only the isolated 4D quasiparticle.
     if (isMFieldRegion && ["projection", "positionX", "positionY", "positionZ", "positionI", "precession", "phaseOffset"].includes(parameter.key)) return false;
+    if (model.id === "blackHole" && parameter.key === "binaryMassC") return blackHoleMerger && String(state.values.binaryCount) === "3";
+    if (model.id === "blackHole" && ["binaryCount", "binaryMassA", "binaryMassB", "spinA", "spinB", "initialSeparation", "mergerConfiguration", "inclination", "waveOpacity"].includes(parameter.key)) return blackHoleMerger;
+    if (model.id === "blackHole" && ["mass", "diskRadius"].includes(parameter.key)) return !blackHoleMerger;
     return true;
   });
   $("#parameterControls").innerHTML = visibleParameters.map((parameter) => {
@@ -1432,7 +1662,7 @@ function renderInspector() {
       <label for="param-${parameter.key}"><span>${parameter.label}</span><output id="out-${parameter.key}">${formatParameter(value, parameter)}</output></label>
       <input id="param-${parameter.key}" data-param="${parameter.key}" type="range" min="${parameter.min}" max="${parameter.max}" step="${parameter.step}" value="${value}">
     </div>`;
-  }).join("") + (isMFieldRegion ? mFieldProjectionPanel() : "") + (matrixPassage ? matrixPassageExplanation() : "") + (phaseDemo ? phaseDemoExplanation() : "") + (model.visual === "collider" ? `
+  }).join("") + (blackHoleMerger ? blackHoleMergerPanel() : "") + (isMFieldRegion ? mFieldProjectionPanel() : "") + (matrixPassage ? matrixPassageExplanation() : "") + (phaseDemo ? phaseDemoExplanation() : "") + (model.visual === "collider" ? `
     <div class="collider-controls">
       <div class="collider-controls-title">Collider display</div>
       <label for="detectorOpacity"><span>Detector visibility</span><output id="detectorOpacityOut">${Math.round((state.values.detectorOpacity ?? 0) * 100)}%</output></label>
@@ -1455,7 +1685,8 @@ function renderInspector() {
       state.values.processMode = "auto";
       renderInspector();
     }
-    if (["beamA", "beamB", "processMode", "baryonNumber", "configuration"].includes(control.dataset.param) || (state.selected.visual === "meson" && ["separation", "stringTension", "constituentMass"].includes(control.dataset.param))) rebuildSpecimen();
+    if (["beamA", "beamB", "processMode", "baryonNumber", "configuration", "binaryCount", "binaryMassA", "binaryMassB", "binaryMassC", "spinA", "spinB", "initialSeparation", "mergerConfiguration", "inclination"].includes(control.dataset.param) || (state.selected.id === "blackHole" && ["mass", "diskRadius"].includes(control.dataset.param)) || (state.selected.visual === "meson" && ["separation", "stringTension", "constituentMass"].includes(control.dataset.param))) rebuildSpecimen();
+    if (state.selected.id === "blackHole" && state.view === "blackHoleMerger" && ["binaryCount", "binaryMassA", "binaryMassB", "binaryMassC", "spinA", "spinB", "initialSeparation", "mergerConfiguration", "inclination"].includes(control.dataset.param)) renderInspector();
     runLocalSolver();
     applyParameterDrivenVisuals();
     const visual = state.visual;
@@ -1492,6 +1723,7 @@ function renderInspector() {
     renderInspector();
   }));
 
+  $("#blackHoleBackendBtn")?.addEventListener("click", () => runBackendSolver());
   $("#sourceLinks").innerHTML = model.sources.map(([label, url]) => `<a href="${url}" target="_blank" rel="noreferrer"><span>${label}</span><i data-lucide="external-link" aria-hidden="true"></i></a>`).join("");
   if (model.id === "neutrinoLens" && state.communicationOpen) renderCommunicationControls();
   window.lucide?.createIcons();
@@ -1500,7 +1732,9 @@ function renderInspector() {
 function renderViewModes(model) {
   const buttons = $$("#viewModes button[data-view]");
   const ru = (localStorage.getItem("qcd-neutrino-language") || "en") === "ru";
-  const labels = model.visual === "macro"
+  const labels = model.id === "blackHole"
+    ? [["structure", "orbit", ru ? "Чёрная дыра" : "Black hole"], ["blackHoleMerger", "waves", ru ? "Симулятор слияния" : "Black-hole merger simulator"]]
+    : model.visual === "macro"
     ? [["structure", "orbit", ru ? "Объект" : "Object"]]
     : model.visual === "complexSpin"
     ? [["structure", "layers-3", ru ? "3D-проекция" : "3D projection"], ...(state.values.configuration === "lattice" ? [["passage", "scan-line", ru ? "Прохождение" : "Passage"]] : [])]
@@ -1653,11 +1887,34 @@ function formatParameter(value, parameter) {
   return `${value.toFixed(decimals)}${parameter.unit ? ` ${parameter.unit}` : ""}`;
 }
 
+function solveBlackHolePreview(values) {
+  const m1 = Number(values.binaryMassA || 36);
+  const m2 = Number(values.binaryMassB || 29);
+  const total = m1 + m2;
+  const eta = m1 * m2 / (total * total);
+  const chirp = Math.pow(m1 * m2, .6) / Math.pow(total, .2);
+  const separation = Number(values.initialSeparation || 28);
+  const spin = (Number(values.spinA || 0) * m1 * m1 + Number(values.spinB || 0) * m2 * m2) / Math.max(total * total, .001);
+  const radiated = total * (.028 + .065 * 4 * eta);
+  const remnant = total - radiated;
+  const finalSpin = clamp(.45 + 1.15 * eta + .42 * spin, 0, .98);
+  const fMerge = 4397 / Math.max(total, .1) * Math.pow(6 / Math.max(separation, 6), 1.5);
+  const data = Array.from({ length: 180 }, (_, index) => {
+    const x = -1 + index / 179 * 1.22;
+    const p = clamp((x + 1) / .98, 0, 1);
+    const frequency = fMerge * (.18 + 1.9 * p * p);
+    const phase = 2 * Math.PI * frequency * (x + 1) * (.22 + .78 * p);
+    const ringdown = x > .03 ? Math.exp(-(x - .03) * 13) * Math.sin(2 * Math.PI * fMerge * 2.1 * (x - .03)) : 0;
+    return { x, primary: x < .03 ? Math.pow(p, 1.65) * Math.sin(phase) : ringdown, secondary: frequency };
+  });
+  return { kind: "black-hole-merger", xLabel: "time relative to merger, s", yLabel: "dimensionless strain (normalised)", primaryLabel: "analytic inspiral + ringdown strain", secondaryLabel: "GW frequency", data, metrics: [["chirp mass", chirp, "M☉"], ["remnant mass", remnant, "M☉"], ["final spin χ", finalSpin, ""]], state: { supported: String(values.binaryCount || "2") === "2", chirpMass: chirp, schwarzschildA: 2.95325008 * m1, schwarzschildB: 2.95325008 * m2, remnantMass: remnant, finalSpin, mergerFrequency: fMerge }, event: { process: "binaryBlackHoleMerger", model: "leading-order inspiral + damped ringdown", initialSeparation: separation }, backendHint: "Einstein Toolkit waveform import / EinsteinPy geodesic adapter" };
+}
+
 function runLocalSolver() {
   const start = performance.now();
   const collisionModel = state.collisionContext ? modelRegistry.find((model) => model.id === "colliderWorkbench") : null;
   const collisionValues = state.collisionContext ? { ...state.values, ...state.collisionContext } : state.values;
-  state.solverResult = solveModel(collisionModel || state.selected, collisionValues);
+  state.solverResult = state.selected.id === "blackHole" && state.view === "blackHoleMerger" ? solveBlackHolePreview(state.values) : solveModel(collisionModel || state.selected, collisionValues);
   state.solverMs = performance.now() - start;
   $("#telemetrySolver").textContent = `local / ${state.solverMs.toFixed(2)} ms`;
   $("#chartSubtitle").textContent = state.solverResult.primaryLabel;
@@ -1688,7 +1945,8 @@ function drawChart() {
   const ctx = chart.getContext("2d");
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, width, height);
-  const data = state.solverResult.data;
+  const data = state.solverResult?.data || [];
+  if (!data.length) return;
   const pad = { left: 42, right: 12, top: 10, bottom: 28 };
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
@@ -1759,6 +2017,25 @@ function applyViewMode() {
   primaryParticles.forEach((object) => { object.visible = true; });
 }
 
+function blackHoleMergerPanel() {
+  const m1 = Number(state.values.binaryMassA || 36);
+  const m2 = Number(state.values.binaryMassB || 29);
+  const m3 = Number(state.values.binaryMassC || 18);
+  const radiusA = 2.95325008 * m1;
+  const radiusB = 2.95325008 * m2;
+  const radiusC = 2.95325008 * m3;
+  const threeBody = String(state.values.binaryCount) === "3";
+  return `<section class="black-hole-merger-panel">
+    <div class="collider-controls-title">Gravitational-wave merger laboratory</div>
+    <strong>${threeBody ? "Three-body visual concept" : "Binary black-hole analytic preview"}</strong>
+    <p>Schwarzschild radii are derived from mass, not chosen independently: rₛ(A) = ${radiusA.toFixed(1)} km, rₛ(B) = ${radiusB.toFixed(1)} km${threeBody ? `, rₛ(C) = ${radiusC.toFixed(1)} km` : ""}. The displayed horizon size changes proportionally with mass.</p>
+    <p>${threeBody ? `The three bodies remain visible through a staged A+B merger followed by the final merger with C. The final display mass is ${ (m1 + m2 + m3).toFixed(1) } M☉, the sum of the input masses for visual continuity. Real mergers radiate energy, so this is not physical mass accounting.` : "The local backend calculates chirp mass, inspiral frequency, radiated-energy estimate and a ringdown proxy. The displayed strain is a leading-order educational waveform."}</p>
+    <p><strong>What is sourced:</strong> the orbitable object rendering is informed by Eric Bruneton’s open black-hole shader and the catalogue links to its paper and source. <strong>What is illustrative:</strong> this animated surface is an embedding diagram for curvature and the outgoing quadrupole pulse; it is not a literal three-dimensional shape of spacetime.</p>
+    <button id="blackHoleBackendBtn" class="solver-btn" type="button">Recalculate with local backend</button>
+    <small>For scientifically resolved spacetime evolution, import a traceable numerical-relativity waveform / dataset generated with Einstein Toolkit or another validated solver. EinsteinPy is suitable for optional geodesic calculations, not for replacing a full merger evolution.</small>
+  </section>`;
+}
+
 function mFieldProjectionPanel() {
   const p = mFieldProjection();
   const rows = [
@@ -1801,11 +2078,13 @@ function runInteraction() {
   const matrixPassage = state.selected.visual === "complexSpin" && state.values.configuration === "lattice" && state.view === "passage";
   const phaseDemo = state.selected.visual === "complexSpin" && state.values.configuration === "lattice" && state.view === "phaseDemo";
   const collisionMode = Boolean(state.collisionContext && isBaryonModel(state.selected));
+  const blackHoleMerger = state.selected.id === "blackHole" && state.view === "blackHoleMerger";
   if ((state.selected.interaction === "collision" || collisionMode) && state.solverResult?.state?.supported === false) {
     setStatus(`НЕПОДДЕРЖИВАЕМАЯ ПАРА · ${state.solverResult.state.reason}`, false);
     return;
   }
-  state.interaction = phaseDemo ? "phaseDemo" : matrixPassage ? "matrixPassage" : collisionMode ? "collision" : state.selected.interaction;
+  state.interaction = blackHoleMerger ? "blackHoleMerger" : phaseDemo ? "phaseDemo" : matrixPassage ? "matrixPassage" : collisionMode ? "collision" : state.selected.interaction;
+  state.blackHoleMergerRunning = blackHoleMerger;
   state.interactionTime = 0;
   state.interactionPhase = null;
   disposeGroup(effects);
@@ -1819,8 +2098,9 @@ function runInteraction() {
   else if (state.interaction === "binding") buildBindingEffect();
   else if (state.interaction === "stringBreak") buildStringBreakingEffect();
   else if (state.interaction === "collision") buildCollisionEffect();
+  else if (state.interaction === "blackHoleMerger") rebuildSpecimen();
   else buildBosonEffect();
-  if (state.interaction === "collision") renderInspector();
+  if (["collision", "blackHoleMerger"].includes(state.interaction)) renderInspector();
   setStatus(interactionStatusText(state.interaction), true);
   $("#telemetryState").textContent = state.solverResult?.event?.process || state.interaction;
 }
@@ -2358,7 +2638,122 @@ function updateAnimations(time, dt) {
     } else if (item.type === "blackHole") {
       item.photonRing.rotation.z += dt * .34;
       item.lensedBand.rotation.z += dt * .09;
-      item.jets.forEach((jet, index) => { jet.material.opacity = .14 + Math.sin(t * 1.8 + index * Math.PI) * .045; });
+      item.disk.rotation.y += dt * .12;
+    } else if (item.type === "interactiveBlackHole") {
+      item.diskUniforms.time.value += dt;
+      item.disk.rotation.z += dt * .11;
+      item.photonRing.rotation.z += dt * .045;
+      item.upperImage.material.opacity = .68 + Math.sin(t * 1.8) * .13;
+      item.lowerImage.material.opacity = .42 + Math.sin(t * 1.5 + .8) * .09;
+      item.starField.rotation.y -= dt * .006;
+    } else if (item.type === "nasaAccretionDisk") {
+      // GIF frames are decoded by the browser; flagging the texture keeps the
+      // animated NASA SVS source updating inside the WebGL scene.
+      item.texture.needsUpdate = true;
+    } else if (item.type === "blackHoleMerger") {
+      // Keep the inspiral on screen long enough to inspect both the orbit and
+      // the emitted wavefronts before the remnant replaces the binary.
+      const duration = item.configuration === "headOn" ? 9.5 : item.configuration === "eccentric" ? 16.5 : 14.0;
+      const p = state.blackHoleMergerRunning ? clamp(state.interactionTime / duration, 0, 1) : 0;
+      const eased = p * p * (3 - 2 * p);
+      const angle = item.configuration === "headOn" ? 0 : p * (8 + p * 20) * Math.PI;
+      const radial = THREE.MathUtils.lerp(item.separation, .18, eased);
+      const yWobble = item.configuration === "eccentric" ? Math.sin(angle) * .72 * (1 - p) : 0;
+      item.a.group.position.set(-radial * .44 * Math.cos(angle), yWobble, -radial * .21 * Math.sin(angle));
+      item.b.group.position.set(radial * .56 * Math.cos(angle), -yWobble, radial * .21 * Math.sin(angle));
+      item.a.group.rotation.y += dt * (1.1 + p * 7);
+      item.b.group.rotation.y -= dt * (1.4 + p * 8);
+      item.a.disk.rotation.y += dt * (1.8 + p * 3.5);
+      item.b.disk.rotation.y -= dt * (2.1 + p * 4);
+      // A three-body scenario has two visible stages: A+B first form a
+      // temporary common horizon, then that horizon and C merge into the
+      // final remnant.  The animation never swaps all three bodies for a
+      // remnant before the C body reaches the same centre.
+      const firstMerge = item.c ? clamp((p - .58) / .18, 0, 1) : 0;
+      const finalMerge = item.c ? clamp((p - .84) / .16, 0, 1) : clamp((p - .94) / .06, 0, 1);
+      const abCentre = item.a.group.position.clone().add(item.b.group.position).multiplyScalar(.5);
+      const activeSources = [];
+      if (!item.c || firstMerge < 1) {
+        item.a.group.visible = item.b.group.visible = true;
+        activeSources.push({ object: item.a.group, mass: item.masses.a }, { object: item.b.group, mass: item.masses.b });
+      } else {
+        item.a.group.visible = item.b.group.visible = false;
+      }
+      if (item.c) {
+        const thirdAngle = angle * .42 + Math.PI * 2 / 3;
+        const thirdRadius = THREE.MathUtils.lerp(item.separation * .82, .12, clamp(p / .985, 0, 1));
+        item.c.group.position.set(Math.cos(thirdAngle) * thirdRadius, Math.sin(thirdAngle * .45) * .22, Math.sin(thirdAngle) * thirdRadius);
+        item.c.group.rotation.y += dt * .42;
+        item.c.disk.rotation.y += dt * 2.2;
+        item.intermediate.group.position.copy(abCentre).lerp(item.c.group.position, finalMerge * .48);
+        item.intermediate.group.rotation.y += dt * 1.7;
+        item.intermediate.disk.rotation.y += dt * 3.1;
+        item.intermediate.group.visible = firstMerge >= 1 && finalMerge < 1;
+        item.c.group.visible = finalMerge < 1;
+        if (firstMerge >= 1 && finalMerge < 1) {
+          activeSources.push({ object: item.intermediate.group, mass: item.masses.a + item.masses.b }, { object: item.c.group, mass: item.masses.c });
+        }
+      }
+      const merged = finalMerge >= 1;
+      item.orbit.visible = !merged && (!item.c || firstMerge < .72);
+      item.remnant.group.visible = merged;
+      item.remnant.group.position.set(0, 0, 0);
+      item.remnant.disk.rotation.y += dt * 3.4;
+      if (merged) activeSources.push({ object: item.remnant.group, mass: item.remnantMass });
+      // A spatial embedding diagram, explicitly not literal 3D spacetime.
+      // The two moving wells and quadrupolar outgoing pulse make the curvature
+      // and radiative degree of freedom observable in the laboratory scene.
+      const position = item.spacetime.geometry.attributes.position;
+      const base = item.spacetime.base;
+      const sourceMass = activeSources.reduce((sum, source) => sum + source.mass, 0) || 1;
+      const sourceX = activeSources.reduce((sum, source) => sum + source.object.position.x * source.mass, 0) / sourceMass;
+      const sourceZ = activeSources.reduce((sum, source) => sum + source.object.position.z * source.mass, 0) / sourceMass;
+      const chirpStrength = .04 + .22 * p * p;
+      const pulseRadius = Math.max(0, (p - .54) * 20.5);
+      for (let vertex = 0; vertex < position.count; vertex += 1) {
+        const index3 = vertex * 3;
+        const x = base[index3];
+        const z = -base[index3 + 1];
+        const r = Math.hypot(x - sourceX, z - sourceZ);
+        const phi = Math.atan2(z - sourceZ, x - sourceX);
+        // Each currently visible horizon contributes its own mass-weighted
+        // well.  Once all three have joined, only the final summed remnant
+        // remains as the source of the explanatory embedding surface.
+        const wells = activeSources.reduce((sum, source) => {
+          const distance2 = (x - source.object.position.x) ** 2 + (z - source.object.position.z) ** 2;
+          return sum - 1.42 * (source.mass / 36) / (1 + distance2 * 1.22);
+        }, 0);
+        const quadrupole = Math.cos(2 * (phi - angle)) * Math.sin(r * 1.65 - p * 22) * chirpStrength * Math.exp(-r * .11);
+        const outgoing = pulseRadius > 0 ? Math.cos(2 * (phi - angle)) * Math.sin((r - pulseRadius) * 5.8) * .34 * Math.exp(-((r - pulseRadius) ** 2) / 1.5) : 0;
+        position.setZ(vertex, wells + quadrupole + outgoing);
+      }
+      position.needsUpdate = true;
+      item.spacetime.grid.material.opacity = merged ? .42 : .25 + p * .19;
+      item.wave.children.forEach((ring, index) => {
+        if (ring === item.wave.userData.mergerFlash) return;
+        // Several shells are emitted during the chirp; their increasing rate
+        // and size make the approaching merger visible at every stage.
+        const local = p > .06 ? (p * 2.45 - index * .095 + 1) % 1 : -1;
+        const waveOpacity = clamp(Number(state.values.waveOpacity ?? .78), 0, 1);
+        ring.visible = local >= 0 && waveOpacity > .005;
+        if (merged) {
+          // Preserve an observable wave train after coalescence rather than
+          // clearing the evidence as soon as the final black hole is shown.
+          const postRadius = 2.0 + index * .47;
+          ring.scale.set(postRadius, postRadius, postRadius);
+          ring.material.opacity = waveOpacity * Math.max(.1, .48 - index * .026);
+        } else if (local >= 0) {
+          const growth = .42 + local * (5.1 + index * .07);
+          ring.scale.set(growth, growth, growth);
+          ring.material.opacity = waveOpacity * Math.max(0, (.78 - index * .025) * (1 - local) * (1 - local * .35));
+        }
+      });
+      const flash = item.wave.userData.mergerFlash;
+      const burst = clamp((p - .88) / .12, 0, 1);
+      const waveOpacity = clamp(Number(state.values.waveOpacity ?? .78), 0, 1);
+      flash.visible = waveOpacity > .005 && burst > 0 && burst < 1;
+      flash.material.opacity = waveOpacity * .86 * Math.sin(burst * Math.PI);
+      flash.scale.setScalar(.4 + burst * 7.2);
     } else if (item.type === "beam") {
       const x = -8.5 + ((t * 2.4) % 17);
       item.object.position.x = x;
@@ -2521,7 +2916,9 @@ function updateAnimations(time, dt) {
   }
   if (state.interaction) {
     state.interactionTime += dt * speed;
-    if (state.interactionTime > 9) {
+    const mergerDuration = state.interaction === "blackHoleMerger" ? (state.values.mergerConfiguration === "headOn" ? 9.5 : state.values.mergerConfiguration === "eccentric" ? 16.5 : 14.0) : 9;
+    if (state.interactionTime > mergerDuration) {
+      if (state.interaction === "blackHoleMerger") state.interactionTime = mergerDuration;
       state.interaction = null;
       setStatus("Процесс завершён · результат обновлён", false);
       $("#telemetryState").textContent = state.selected.status;
@@ -2744,6 +3141,7 @@ $("#viewModes").addEventListener("click", (event) => {
   const button = event.target.closest("button[data-view]");
   if (!button) return;
   state.view = button.dataset.view;
+  if (state.view === "blackHoleMerger") window.dispatchEvent(new Event("qcd-black-hole-merger-view"));
   $$("#viewModes button").forEach((item) => item.classList.toggle("active", item === button));
   applyViewMode();
   if (["collision", "annihilation"].includes(state.view) && isBaryonModel(state.selected)) {
@@ -2788,6 +3186,14 @@ $("#viewModes").addEventListener("click", (event) => {
       setStatus("CONFINEMENT · select a valence quark and pull it", false);
     }
   }
+});
+window.addEventListener("qcd-black-hole-merger-view", () => {
+  if (state.selected.id !== "blackHole" || state.view !== "blackHoleMerger") return;
+  state.blackHoleMergerRunning = false;
+  state.interaction = null;
+  rebuildSpecimen();
+  runLocalSolver();
+  renderInspector();
 });
 window.addEventListener("resize", resize);
 window.addEventListener("keydown", (event) => { if (event.key === "Escape") hideComponentInfo(); });

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import math
 import random
@@ -427,9 +428,58 @@ def solve_collision(values: dict[str, Any], model: str, points: int = 120) -> di
     }
 
 
+def solve_black_hole_merger(values: dict[str, Any], points: int = 180) -> dict[str, Any]:
+    """Analytic binary-BH preview; intentionally not a numerical-relativity evolution."""
+    m1 = max(float(values.get("binaryMassA", 36.0)), 1.0)
+    m2 = max(float(values.get("binaryMassB", 29.0)), 1.0)
+    total = m1 + m2
+    eta = m1 * m2 / (total * total)
+    chirp_mass = (m1 * m2) ** 0.6 / total ** 0.2
+    separation = max(float(values.get("initialSeparation", 28.0)), 6.0)
+    spin_a = max(-0.99, min(0.99, float(values.get("spinA", 0.0))))
+    spin_b = max(-0.99, min(0.99, float(values.get("spinB", 0.0))))
+    effective_spin = (spin_a * m1 * m1 + spin_b * m2 * m2) / (total * total)
+    radiated_fraction = 0.028 + 0.065 * 4.0 * eta
+    remnant_mass = total * (1.0 - radiated_fraction)
+    remnant_spin = max(0.0, min(0.98, 0.45 + 1.15 * eta + 0.42 * effective_spin))
+    merger_frequency = 4397.0 / total * (6.0 / separation) ** 1.5
+    data: list[dict[str, float]] = []
+    for index in range(points):
+        moment = -1.0 + index * 1.22 / (points - 1)
+        progress = max(0.0, min(1.0, (moment + 1.0) / 0.98))
+        frequency = merger_frequency * (0.18 + 1.9 * progress * progress)
+        phase = 2.0 * math.pi * frequency * (moment + 1.0) * (0.22 + 0.78 * progress)
+        ringdown = math.exp(-(moment - 0.03) * 13.0) * math.sin(2.0 * math.pi * merger_frequency * 2.1 * (moment - 0.03)) if moment > 0.03 else 0.0
+        strain = progress ** 1.65 * math.sin(phase) if moment < 0.03 else ringdown
+        data.append({"x": moment, "primary": strain, "secondary": frequency})
+    binary_supported = str(values.get("binaryCount", "2")) == "2"
+    return {
+        "kind": "black-hole-merger",
+        "xLabel": "time relative to merger, s",
+        "yLabel": "dimensionless strain (normalised)",
+        "primaryLabel": "analytic inspiral + damped ringdown strain",
+        "secondaryLabel": "GW frequency, Hz",
+        "data": data,
+        "metrics": [["chirp mass", chirp_mass, "M☉"], ["remnant mass", remnant_mass, "M☉"], ["final spin χ", remnant_spin, ""]],
+        "state": {
+            "supported": binary_supported,
+            "schwarzschildRadiusA_km": 2.95325008 * m1,
+            "schwarzschildRadiusB_km": 2.95325008 * m2,
+            "chirpMass": chirp_mass,
+            "remnantMass": remnant_mass,
+            "finalSpin": remnant_spin,
+            "mergerFrequencyHz": merger_frequency,
+        },
+        "event": {"process": "binaryBlackHoleMerger", "model": "leading-order inspiral + damped ringdown", "initialSeparation_rg": separation},
+        "backendHint": "Use Einstein Toolkit numerical-relativity waveform import for a validated spacetime evolution; EinsteinPy is suitable for optional geodesic calculations.",
+    }
+
+
 def solve(model: str, values: dict[str, Any]) -> dict[str, Any]:
     if model == "neutrinoLens":
         return solve_neutrino_lens(values)
+    if model == "blackHole":
+        return solve_black_hole_merger(values)
     if model in {"hydrogen", "helium4"}:
         return solve_atomic_photon(values, helium=model == "helium4")
     if model in {"hDibaryon", "omegaOmega"}:
@@ -456,6 +506,16 @@ class LabHandler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def do_GET(self) -> None:
+        # The desktop shortcut and earlier versions of the project opened the
+        # laboratory directly at http://127.0.0.1:8892/.  Keep that stable
+        # public entry point while the current repository stores the lab under
+        # /matter-lab/.
+        if self.path == "/" or self.path.startswith("/?"):
+            query = self.path[1:]
+            self.send_response(HTTPStatus.FOUND)
+            self.send_header("Location", f"/matter-lab/{query}")
+            self.end_headers()
+            return
         if self.path.split("?", 1)[0] == "/api/status":
             self.send_json({
                 "ok": True,
@@ -465,6 +525,8 @@ class LabHandler(SimpleHTTPRequestHandler):
                     "compose": "table-loader-ready",
                     "nusquids": "contract-ready",
                     "geant4": "contract-ready",
+                    "einsteinpy": "available" if importlib.util.find_spec("einsteinpy") else "optional-not-installed",
+                    "einstein_toolkit": "external-waveform-import-ready",
                 },
             })
             return

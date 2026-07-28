@@ -15,6 +15,7 @@ It is a visual and computational education project. It clearly distinguishes exp
 - A dedicated **Neutrino Communication Lab** inside the Neutrino Lens hypothesis. It compares a photon/EM channel and a neutrino-beam channel crossing rock, with message-to-bits-to-received-message demonstration controls.
 - A collider workbench with transparent detector layers, speed/pause controls, configurable beams, and explanatory event summaries.
 - Macro-object scenes for the Sun, Jupiter, black holes, neutron stars, and compact-object catalogue entries.
+- An orbitable WebGL black-hole view with a lensed accretion disk, photon-ring-inspired features, and a merger-laboratory mode for two or three compact objects. The merger mode is explicitly educational: it visualises an analytic/qualitative inspiral, curvature embedding and gravitational-wave fronts, rather than a numerical-relativity prediction.
 - A project-hypothesis workspace for a 4D complex-spin quasiparticle, including 3D slices, a tesseract projection, sparse 3D M-field regions, and ordinary-3D probe demonstrations.
 - Per-model scientific notes, equations, scope limitations, and source links.
 
@@ -54,6 +55,7 @@ These are **not bundled or executed in the browser**. The catalogue links to the
 - [nuSQuIDS](https://github.com/arguelles/nuSQuIDS) for neutrino propagation calculations.
 - [MUSES](https://musesframework.io/) and [CompOSE](https://compose.obspm.fr/) for dense-matter equations of state.
 - [MEEP](https://github.com/NanoComp/meep), [Einstein Toolkit](https://einsteintoolkit.org/), [GADGET-4](https://wwwmpa.mpa-garching.mpg.de/gadget4/), [CosmoLattice](https://cosmolattice.net/) and [AxionCAMB](https://github.com/dgrin1/axionCAMB) as referenced open simulation ecosystems for specialised catalogue topics.
+- [Eric Bruneton's open black-hole shader](https://github.com/ebruneton/black_hole_shader) and its accompanying [technical paper](https://ebruneton.github.io/black_hole_shader/paper.pdf) as a reference for real-time Schwarzschild-inspired ray-bending visuals. It is not the non-public renderer used for *Interstellar* and does not replace numerical relativity.
 - [NASA 3D Resources](https://github.com/nasa/NASA-3D-Resources) and the NASA resource pages linked from individual model cards.
 
 The browser scenes are deliberately lightweight educational representations. They must not be presented as results produced by those upstream research packages.

@@ -882,10 +882,47 @@ const russianExoticCatalog = {
   'author-hypothesis-family':['Авторские гипотетические модели','Полная классификация — локальной 3D-модели нет','Программируемые атомы, нейтрино-чувствительная материя и нейтринные линзы, поляризационная и спин-программируемая материя, кварковые кристаллы, самособирающаяся странная материя, программируемые стрэнджлеты и информационно-связанная материя.']
 };
 
+const hebrewTitles = {
+  proton:'פרוטון', neutron:'נייטרון', hydrogen:'אטום מימן', helium4:'הליום‑4', hyperon:'היפרון למדא',
+  neutronMatter:'חומר נייטרונים', qgp:'פלזמת קווארקים–גלואונים', mitBag:'חומר קווארקים מסוג MIT Bag', njl:'חומר קווארקים NJL',
+  twoSC:'פאזה צבעונית 2SC', cfl:'פאזה צבעונית CFL', strangelet:'סטריינג׳לט', hyperonMatter:'חומר היפרוני',
+  kaonCondensate:'עיבוי קאונים', quarkyonic:'חומר קווארקיוני', qhc21:'מעבר QHC21', loff:'גביש LOFF',
+  gCFL:'פאזה gCFL', cflKaon:'פאזה CFL-K⁰', cflStrangelet:'סטריינג׳לט CFL', hDibaryon:'דיבאריון H', omegaOmega:'דיבאריון ΩΩ',
+  pionPlus:'פיון π⁺', kaonPlus:'קאון K⁺', rhoZero:'מזון ρ⁰', jPsi:'J/ψ', upsilon1S:'Υ(1S)', x3872:'X(3872)',
+  scalarGlueball:'גלובול סקלרי', hybridMeson:'מזון היברידי', colliderWorkbench:'סביבת מאיץ', ppMinimumBias:'pp · minimum-bias',
+  ppDijet:'pp → dijet + X', ppHiggsGammaGamma:'pp → H → γγ', ppZPrime:'pp → Z′ → μ⁺μ⁻', ppHiddenValley:'pp → hidden-valley shower',
+  neutrinoLens:'עדשת נייטרינו', strangeStar:'כוכב מוזר', axionField:'שדה אקסיון של חומר אפל', fuzzyDarkMatter:'חומר אפל מטושטש',
+  qBall:'כדור Q', bosonStar:'כוכב בוזוני', mirrorMatter:'חומר מראה', darkHadron:'מגזר הדרונים אפל', magneticMonopole:'מונופול מגנטי',
+  cosmicString:'מיתר קוסמי', metamaterial:'מטא־חומר אלקטרומגנטי', preonMatter:'חומר פריאונים',
+  sun:'שמש', jupiter:'צדק', blackHole:'חור שחור', neutronStar:'כוכב נייטרונים',
+  complexSpinQuasiparticle:'קוואזי־חלקיק 4D בעל ספין מרוכב', tesseract4d:'טסרקט (היפר־קובייה 4D)',
+  antiproton:'אנטי־פרוטון', antineutron:'אנטי־נייטרון', antihyperon:'אנטי־היפרון למדא', electron:'אלקטרון', positron:'פוזיטרון',
+  muon:'מיואון', antimuon:'אנטי־מיואון', tau:'לפטון טאו', antitau:'אנטי־טאו', electronNeutrino:'נייטרינו אלקטרוני',
+  electronAntineutrino:'אנטי־נייטרינו אלקטרוני', muonNeutrino:'נייטרינו מיואוני', muonAntineutrino:'אנטי־נייטרינו מיואוני',
+  tauNeutrino:'נייטרינו טאו', tauAntineutrino:'אנטי־נייטרינו טאו'
+};
+
+const hebrewFamilyTitles = {
+  ordinary:'חלקיק רגיל', baryon:'בריון', lepton:'לפטון', nucleus:'גרעין או אטום', dense:'חומר צפוף', qgp:'פאזת QCD',
+  meson:'מזון', strange:'חומר מוזר', exotic:'חומר אקזוטי', macro:'עצם מאקרוסקופי', hypothetical:'השערת פרויקט'
+};
+
 export function setCatalogLocale(locale = 'en') {
   modelRegistry.forEach((model) => {
     const original = catalogOriginal.get(model.id);
     if (original) Object.assign(model, original);
+    if (locale === 'he') {
+      model.title = hebrewTitles[model.id] || hebrewFamilyTitles[model.family] || 'רשומת קטלוג מדעית';
+      model.subtitle = model.visual === 'unavailable' ? 'רשומת קטלוג — ללא מודל תלת־ממדי מקומי' : 'מפרט מודל לימודי';
+      model.description = 'מודל לימודי אינטראקטיבי. המעמד המדעי, ההנחות וההגבלות מוצגים בלוח זה.';
+      model.applicability = model.visual === 'unavailable'
+        ? 'זוהי רשומת קטלוג. ההדמיה המקומית אינה מוצגת עד שתהיה זמינה מודל מדעי ספציפי ובר־אימות.'
+        : 'ההדמיה מיועדת ללימוד ולהמחשה; היא אינה קביעה של תוצאה פיזיקלית חדשה.';
+      model.statusLabel = model.status === 'confirmed' ? 'אושר בניסוי'
+        : model.status === 'catalog' ? 'רשומת קטלוג'
+        : model.status === 'theoretical' ? 'מודל תאורטי' : 'הרחבה היפותטית';
+      return;
+    }
     if (locale !== 'ru') return;
     const translated = russianExoticCatalog[model.id];
     if (translated) {
@@ -940,7 +977,7 @@ modelRegistry.push(...standardParticleRegistry.map(([id, family, title, subtitle
 modelRegistry.push(
   { id:'sun', family:'macro', title:'Sun', subtitle:'G-type main-sequence star', status:'confirmed', statusLabel:'OBSERVED STAR', description:'A locally rendered solar sphere using the texture from NASA’s downloadable Sun USDZ asset, with a restrained corona for readability.', formula:'L = 4πR²σT_eff⁴', applicability:'Visual representation only; it is not a magnetohydrodynamic solar calculation.', visual:'macro', macroKind:'sun', interaction:'field', parameters:[{key:'temperature',label:'Photosphere temperature',unit:'K',min:3500,max:7500,step:50,value:5772},{key:'activity',label:'Magnetic activity',min:0,max:1,step:.01,value:.42}], sources:[['NASA Sun 3D model (USDZ source texture)','https://science.nasa.gov/learn/heat/resource/sun-3d-model/'],['NASA 3D Resources','https://github.com/nasa/NASA-3D-Resources']] },
   { id:'jupiter', family:'macro', title:'Jupiter', subtitle:'Gas giant — hydrogen/helium atmosphere', status:'confirmed', statusLabel:'OBSERVED PLANET', description:'NASA glTF model, stored locally in this laboratory with its original mesh and texture.', formula:'v_esc = √(2GM/R);  P(r) = ∫ρg dr', applicability:'Imported visual asset; this is not an atmospheric fluid simulation.', visual:'macro', macroKind:'jupiter', interaction:'field', parameters:[{key:'rotationPeriod',label:'Rotation period',unit:'h',min:7,max:14,step:.1,value:9.9},{key:'bandContrast',label:'Band contrast',min:0,max:1,step:.01,value:.65}], sources:[['NASA Jupiter 3D model (glTF download)','https://science.nasa.gov/resource/jupiter-3d-model/'],['NASA Eyes on the Solar System','https://science.nasa.gov/eyes/']] },
-  { id:'blackHole', family:'macro', title:'Black hole', subtitle:'Educational 3D accretion-disk model', status:'confirmed', statusLabel:'OBSERVED COMPACT OBJECT', description:'A native 3D laboratory model: event horizon, photon ring, layered hot accretion disk, lensed secondary band, and bipolar jets. It replaces the former title-card image.', formula:'r_s = 2GM/c²;  ds² = −(1−r_s/r)c²dt² + (1−r_s/r)⁻¹dr² + r²dΩ²', applicability:'Physics-motivated explanatory rendering, not a general-relativistic ray-tracing or MHD run.', visual:'macro', macroKind:'blackHole', interaction:'gravity', parameters:[{key:'mass',label:'Mass',unit:'M☉',min:3,max:1000000,step:1,value:4300000},{key:'diskRadius',label:'Disk radius',unit:'r_s',min:2,max:14,step:.1,value:6}], sources:[['NASA SVS: Black Hole Accretion Disk Visualization','https://svs.gsfc.nasa.gov/13326/'],['NASA black-hole visualisation context','https://science.nasa.gov/universe/black-holes/supermassive-black-holes/new-nasa-black-hole-visualization-takes-viewers-beyond-the-brink/'],['CC-BY downloadable reference model — Sebastian Sosnowski','https://sketchfab.com/3d-models/black-hole-cfd16738ad2c402b9dc8e38a9c05c8d4']] },
+  { id:'blackHole', family:'macro', title:'Black hole', subtitle:'Interactive WebGL accretion disk and merger laboratory', status:'confirmed', statusLabel:'OBSERVED COMPACT OBJECT', description:'The object view is an orbitable local WebGL rendering: an event-horizon shadow, photon ring, Doppler-brightened accretion disk, and lensed images of the disk are generated inside the scene. It is informed by Eric Bruneton’s open real-time black-hole rendering work; the NASA SVS animation remains a cited scientific reference, not the displayed object.', formula:'r_s = 2GM/c²;  ds² = −(1−r_s/r)c²dt² + (1−r_s/r)⁻¹dr² + r²dΩ²', applicability:'This browser renderer is a qualitative Schwarzschild-inspired visual model, not a numerical-relativity calculation or the non-public Interstellar DNGR renderer. The merger waveform and spatial grid are illustrative analytic approximations; a traceable Einstein Toolkit or equivalent dataset is required for quantitative predictions.', visual:'macro', macroKind:'blackHole', interaction:'gravity', parameters:[{key:'mass',label:'Mass',unit:'M☉',min:3,max:10000000,step:1000,value:4300000},{key:'diskRadius',label:'Disk radius',unit:'r_s',min:2,max:14,step:.1,value:6},{key:'binaryCount',label:'Black holes',type:'select',value:'2',options:[['2','Binary — physical analytic mode'],['3','Three-body — visual concept only']]},{key:'binaryMassA',label:'Primary mass',unit:'M☉',min:5,max:120,step:.5,value:36},{key:'binaryMassB',label:'Secondary mass',unit:'M☉',min:5,max:120,step:.5,value:29},{key:'binaryMassC',label:'Tertiary mass',unit:'M☉',min:5,max:120,step:.5,value:18},{key:'spinA',label:'Primary dimensionless spin χ₁',min:-.95,max:.95,step:.01,value:.15},{key:'spinB',label:'Secondary dimensionless spin χ₂',min:-.95,max:.95,step:.01,value:-.1},{key:'initialSeparation',label:'Initial separation',unit:'r_g',min:8,max:54,step:1,value:28},{key:'mergerConfiguration',label:'Merger configuration',type:'select',value:'quasiCircular',options:[['quasiCircular','Quasi-circular inspiral'],['eccentric','Eccentric encounter'],['headOn','Head-on collision']]},{key:'inclination',label:'Viewing inclination',unit:'°',min:0,max:85,step:1,value:38},{key:'waveOpacity',label:'External gravitational-wave visibility',unit:'%',min:0,max:1,step:.01,value:.78}], sources:[['Eric Bruneton — interactive black-hole shader (BSD-3-Clause)','https://github.com/ebruneton/black_hole_shader'],['Bruneton, Real-time High-Quality Rendering of Non-Rotating Black Holes (2020)','https://ebruneton.github.io/black_hole_shader/paper.pdf'],['Einstein Toolkit Binary Black Hole Gallery','https://www.einsteintoolkit.org/gallery/bbh/index.html'],['Einstein Toolkit','https://einsteintoolkit.org/'],['EinsteinPy documentation','https://docs.einsteinpy.org/en/stable/'],['NASA SVS: Black Hole Accretion Disk Visualization','https://svs.gsfc.nasa.gov/13326/'],['NASA black-hole visualisation context','https://science.nasa.gov/universe/black-holes/supermassive-black-holes/new-nasa-black-hole-visualization-takes-viewers-beyond-the-brink/']] },
   { id:'neutronStar', family:'macro', title:'Neutron star', subtitle:'Magnetised compact remnant', status:'confirmed', statusLabel:'OBSERVED COMPACT OBJECT', description:'Procedural representation of a rotating magnetised neutron star with polar emission cones. NASA supplies a data-derived 3D Crab Nebula resource powered by a pulsar.', formula:'M ≈ 1–2 M☉;  R ≈ 10–14 km;  B_p ∝ μ/R³', applicability:'Explanatory pulsar/magnetosphere view, not a numerical general-relativistic MHD solution.', visual:'macro', macroKind:'neutronStar', interaction:'field', parameters:[{key:'spinFrequency',label:'Spin frequency',unit:'Hz',min:.1,max:716,step:.1,value:30},{key:'magneticField',label:'Surface field',unit:'10¹² G',min:.01,max:1000,step:.01,value:1}], sources:[['NASA Crab Nebula 3D resource','https://science.nasa.gov/3d-resources/crab-nebula/'],['NASA NICER neutron-star science','https://science.nasa.gov/mission/nicer/']] }
 );
 
@@ -953,7 +990,7 @@ modelRegistry.push(
 Object.assign(russianExoticCatalog, {
   sun: ["Солнце", "Звезда главной последовательности класса G", "Локальная сфера Солнца с текстурой из загружаемой USDZ-модели NASA и сдержанной короной для наглядности."],
   jupiter: ["Юпитер", "Газовый гигант — атмосфера из водорода и гелия", "Локально встроенная glTF-модель NASA с исходной геометрией и текстурой."],
-  blackHole: ["Чёрная дыра", "Учебная 3D-модель аккреционного диска", "Нативная 3D-модель лаборатории: горизонт событий, фотонное кольцо, слоистый горячий аккреционный диск, линзированная вторичная полоса и биполярные джеты. Она заменяет прежнюю картинку-заставку."],
+  blackHole: ["Чёрная дыра", "Интерактивный WebGL-диск и лаборатория слияний", "Основной вид — вращаемая локальная WebGL-сцена: тень горизонта, фотонное кольцо, доплеровски усиленный аккреционный диск и его линзированные изображения строятся внутри 3D-сцены. Она опирается на открытый рендер Эрика Брюнетона; NASA SVS остаётся научным референсом, а не вставленной картинкой."],
   neutronStar: ["Нейтронная звезда", "Магнитизированный компактный остаток", "Процедурная модель вращающейся магнитизированной нейтронной звезды с полярными пучками; NASA публикует 3D-ресурс Крабовидной туманности, питаемой пульсаром."]
 });
 
