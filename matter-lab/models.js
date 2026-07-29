@@ -902,6 +902,8 @@ const hebrewTitles = {
   tauNeutrino:'נייטרינו טאו', tauAntineutrino:'אנטי־נייטרינו טאו'
 };
 
+hebrewTitles.gravitationalStandingWaveCore = "ליבת גלי כבידה עומדים";
+
 const hebrewFamilyTitles = {
   ordinary:'חלקיק רגיל', baryon:'בריון', lepton:'לפטון', nucleus:'גרעין או אטום', dense:'חומר צפוף', qgp:'פאזת QCD',
   meson:'מזון', strange:'חומר מוזר', exotic:'חומר אקזוטי', macro:'עצם מאקרוסקופי', hypothetical:'השערת פרויקט'
@@ -921,6 +923,10 @@ export function setCatalogLocale(locale = 'en') {
       model.statusLabel = model.status === 'confirmed' ? 'אושר בניסוי'
         : model.status === 'catalog' ? 'רשומת קטלוג'
         : model.status === 'theoretical' ? 'מודל תאורטי' : 'הרחבה היפותטית';
+      if (model.id === 'gravitationalStandingWaveCore') {
+        const labels = ['צמתי אופק קומפקטי', 'רדיוס מסלול', 'קצב מסלול', 'משרעת גל', 'תדירות גל עומד', 'צפיפות צמתים', 'סנכרון מופע', 'קיטוב גל', 'נראות רשת מרחב־זמן', 'נראות חזיתות גל'];
+        model.parameters.forEach((parameter, index) => { parameter.label = labels[index] || parameter.label; });
+      }
       return;
     }
     if (locale !== 'ru') return;
@@ -1036,6 +1042,48 @@ russianExoticCatalog.complexSpinQuasiparticle = [
   "PT-симметричная эффективная неэрмитова проекция",
   "Гипотетическая 4D-квазичастица, показанная через изменяющийся 3D-срез. Реальная часть эффективного спина отображается прецессией, мнимая — пульсацией, фазовым сдвигом и неэрмитовым откликом. Это не заявленная элементарная частица и не предсказание нового состояния вещества.",
   "Неэрмитовы и PT-симметричные эффективные гамильтонианы применяются для открытых систем; трактовка объекта как 4D-частицы и его геометрия здесь являются авторской учебной гипотезой.",
+  "АВТОРСКАЯ ГИПОТЕЗА"
+];
+
+// Author-defined gravitational standing-wave core.  The representation is
+// intentionally educational: it is not a numerical-relativity calculation.
+modelRegistry.push({
+  id: "gravitationalStandingWaveCore",
+  family: "hypothetical",
+  title: "Gravitational standing-wave core",
+  subtitle: "Hypothetical synchronized compact-object resonator",
+  status: "hypothetical",
+  statusLabel: "AUTHOR HYPOTHESIS",
+  description: "A speculative educational model of 6–16 compact horizons arranged in synchronized coplanar orbits. Their idealised tensor-wave contributions form a controlled standing-wave pattern with fixed nodes, antinodes and translucent wavefronts in a deformable spacetime grid.",
+  formula: "h_ij(r,t) = A sin(k r) cos(ωt + φ) e_ij;  r_s = 2GM/c²",
+  applicability: "Standing gravitational-wave modes and compact-binary waveforms are established subjects, but no stable multi-black-hole resonator of this type is known. This interactive scene is an author-defined visual hypothesis, not numerical relativity or a prediction.",
+  visual: "standingWaveCore",
+  interaction: "gravity",
+  parameters: [
+    { key: "coreCount", label: "Compact-horizon nodes", type: "select", value: "8", options: [["6", "6 nodes"], ["8", "8 nodes"], ["12", "12 nodes"], ["16", "16 nodes"]] },
+    { key: "coreOrbitRadius", label: "Orbital radius", min: 3.8, max: 8.8, step: 0.1, value: 5.8, unit: "r_g (visual)" },
+    { key: "coreOrbitRate", label: "Orbital rate", min: 0.05, max: 1.2, step: 0.01, value: 0.32, unit: "rad/s" },
+    { key: "waveAmplitude", label: "Wave amplitude", min: 0, max: 1, step: 0.01, value: 0.62, unit: "visual" },
+    { key: "waveFrequency", label: "Standing-wave frequency", min: 0.1, max: 2.5, step: 0.01, value: 0.72, unit: "Hz (visual)" },
+    { key: "nodeDensity", label: "Radial node density", min: 1, max: 8, step: 1, value: 3, unit: "" },
+    { key: "resonanceStability", label: "Phase synchronisation", min: 0, max: 1, step: 0.01, value: 0.84, unit: "" },
+    { key: "polarization", label: "Wave polarisation", type: "select", value: "plus", options: [["plus", "+ polarisation"], ["cross", "× polarisation"], ["elliptical", "elliptical"]] },
+    { key: "gridOpacity", label: "Spacetime grid visibility", min: 0, max: 1, step: 0.01, value: 0.52, unit: "" },
+    { key: "frontOpacity", label: "Wavefront visibility", min: 0, max: 1, step: 0.01, value: 0.30, unit: "" }
+  ],
+  sources: [
+    ["LIGO — gravitational-wave basics", "https://www.ligo.caltech.edu/page/what-are-gw"],
+    ["Einstein Toolkit — open numerical-relativity infrastructure", "https://einsteintoolkit.org/"],
+    ["Gravitational Waves, Vol. 1 — Maggiore", "https://global.oup.com/academic/product/gravitational-waves-9780198570745"]
+  ]
+});
+const standingWaveCoreModel = modelRegistry.find((model) => model.id === "gravitationalStandingWaveCore");
+catalogOriginal.set(standingWaveCoreModel.id, { ...standingWaveCoreModel, parameters: standingWaveCoreModel.parameters.map((parameter) => ({ ...parameter })) });
+russianExoticCatalog.gravitationalStandingWaveCore = [
+  "Гравитационное ядро стоячих волн",
+  "Гипотетический синхронизированный резонатор компактных объектов",
+  "Спекулятивная учебная модель из 6–16 компактных горизонтов на синхронизированных копланарных орбитах. Их идеализированные тензорные волны образуют управляемую стоячую структуру с узлами, пучностями и полупрозрачными фронтами в деформируемой сетке пространства-времени.",
+  "Стоячие гравитационные волны и волны от компактных двойных систем изучаются в физике, но устойчивый резонатор из множества чёрных дыр такого вида неизвестен. Это авторская учебная гипотеза, а не численная ОТО и не предсказание.",
   "АВТОРСКАЯ ГИПОТЕЗА"
 ];
 

@@ -840,6 +840,88 @@ function createTesseract() {
   animated.push({ type: "tesseract", object: wireframe, geometry });
 }
 
+function createGravitationalStandingWaveCore() {
+  const values = state.values;
+  const count = Number(values.coreCount || 8);
+  const radius = Number(values.coreOrbitRadius || 5.8);
+  const core = new THREE.Group();
+  const holes = [];
+  const orbitPoints = [];
+
+  for (let index = 0; index < 160; index += 1) {
+    const angle = (index / 160) * Math.PI * 2;
+    orbitPoints.push(new THREE.Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius * 0.54));
+  }
+  const orbit = new THREE.LineLoop(
+    new THREE.BufferGeometry().setFromPoints(orbitPoints),
+    new THREE.LineBasicMaterial({ color: 0x55e7ff, transparent: true, opacity: 0.28 })
+  );
+  orbit.userData.pickable = false;
+  core.add(orbit);
+
+  for (let index = 0; index < count; index += 1) {
+    const group = new THREE.Group();
+    const horizon = new THREE.Mesh(
+      new THREE.SphereGeometry(0.38, 28, 20),
+      new THREE.MeshPhysicalMaterial({ color: 0x02040b, roughness: 0.15, metalness: 0.1, clearcoat: 0.8 })
+    );
+    const photonRing = new THREE.Mesh(
+      new THREE.TorusGeometry(0.57, 0.035, 8, 64),
+      new THREE.MeshBasicMaterial({ color: 0xffbd54, transparent: true, opacity: 0.88 })
+    );
+    photonRing.rotation.x = Math.PI / 2;
+    const lensedBand = new THREE.Mesh(
+      new THREE.TorusGeometry(0.49, 0.022, 8, 48),
+      new THREE.MeshBasicMaterial({ color: 0xff5e87, transparent: true, opacity: 0.55 })
+    );
+    lensedBand.rotation.set(0.72, 0.28, 0.22);
+    group.add(horizon, photonRing, lensedBand);
+    tagComponent(group, "gravitationalCoreNode", { index: index + 1, representation: "hypothetical compact horizon" });
+    core.add(group);
+    holes.push({ group, photonRing, lensedBand, phase: (index / count) * Math.PI * 2 });
+  }
+  specimen.add(core);
+
+  const gridGeometry = new THREE.PlaneGeometry(23, 23, 48, 48);
+  gridGeometry.rotateX(-Math.PI / 2);
+  const baseGrid = Float32Array.from(gridGeometry.attributes.position.array);
+  const grid = new THREE.Mesh(
+    gridGeometry,
+    new THREE.MeshBasicMaterial({ color: 0x81edff, wireframe: true, transparent: true, opacity: Number(values.gridOpacity ?? 0.52), depthWrite: false })
+  );
+  grid.position.y = -1.65;
+  grid.userData.pickable = false;
+  specimen.add(grid);
+  fieldObjects.push(grid);
+
+  const fronts = [];
+  for (let index = 0; index < 5; index += 1) {
+    const front = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 32, 20),
+      new THREE.MeshBasicMaterial({ color: index % 2 ? 0xc69cff : 0x7fefff, wireframe: true, transparent: true, opacity: 0.12, depthWrite: false })
+    );
+    front.scale.setScalar(2.25 + index * 1.58);
+    front.userData.pickable = false;
+    specimen.add(front);
+    fronts.push(front);
+  }
+
+  const nodes = [];
+  for (let index = 0; index < 12; index += 1) {
+    const angle = (index / 12) * Math.PI * 2;
+    const node = new THREE.Mesh(
+      new THREE.SphereGeometry(0.07, 14, 10),
+      new THREE.MeshBasicMaterial({ color: 0xe8f8ff, transparent: true, opacity: 0.65 })
+    );
+    node.position.set(Math.cos(angle) * 3.2, 0.06, Math.sin(angle) * 3.2 * 0.54);
+    node.userData.pickable = false;
+    specimen.add(node);
+    nodes.push(node);
+  }
+
+  animated.push({ type: "standingWaveCore", core, holes, grid, baseGrid, fronts, nodes, count });
+}
+
 function fitImportedAsset(asset, targetSize = 6.2) {
   // Imported assets often have an authoring pivot far from their visible mesh.
   // Normalize the visual bounding box at the laboratory origin before exposing it
@@ -1537,6 +1619,7 @@ function rebuildSpecimen() {
   else if (model.visual === "lepton") createLepton(model);
   else if (model.visual === "atom") createAtom(model);
   else if (model.visual === "complexSpin") createComplexSpinQuasiparticle();
+  else if (model.visual === "standingWaveCore") createGravitationalStandingWaveCore();
   else if (model.visual === "polytope4d") createTesseract();
   else if (model.id === "blackHole" && state.view === "blackHoleMerger") createBlackHoleMerger();
   else if (model.visual === "macro") createMacroObject(model);
@@ -1651,12 +1734,14 @@ function renderInspector() {
   const matrixPassage = isMFieldRegion && state.view === "passage";
   const phaseDemo = isMFieldRegion && state.view === "phaseDemo";
   const blackHoleMerger = model.id === "blackHole" && state.view === "blackHoleMerger";
+  const standingWaveCore = model.visual === "standingWaveCore";
   $("#runInteractionBtn").hidden = (["macro", "polytope4d"].includes(model.visual) && !blackHoleMerger) || (model.visual === "complexSpin" && !matrixPassage && !phaseDemo);
   const runInteractionLabel = $("#runInteractionBtn span");
   if (runInteractionLabel) runInteractionLabel.textContent = matrixPassage ? ((localStorage.getItem("qcd-neutrino-language") || "en") === "ru" ? "Запустить зонд" : "Run probe") : interactionLabel(model);
 
   if (phaseDemo && runInteractionLabel) runInteractionLabel.textContent = (localStorage.getItem("qcd-neutrino-language") || "en") === "ru" ? "Р—Р°РїСѓСЃС‚РёС‚СЊ РґРµРјРѕРЅСЃС‚СЂР°С†РёСЋ" : "Run demonstration";
   if (blackHoleMerger && runInteractionLabel) runInteractionLabel.textContent = state.blackHoleMergerRunning ? "Restart merger" : "Start merger";
+  if (standingWaveCore && runInteractionLabel) runInteractionLabel.textContent = (localStorage.getItem("qcd-neutrino-language") || "en") === "ru" ? "Возбудить резонанс" : "Excite resonance";
   const visibleParameters = model.parameters.filter((parameter) => {
     const mFieldParameters = ["probeType", "mMode", "iPhase", "iCoupling", "leakage", "projectionCoherence"];
     if (mFieldParameters.includes(parameter.key)) return isMFieldRegion;
@@ -1703,7 +1788,7 @@ function renderInspector() {
       state.values.processMode = "auto";
       renderInspector();
     }
-    if (["beamA", "beamB", "processMode", "baryonNumber", "configuration", "binaryCount", "binaryMassA", "binaryMassB", "binaryMassC", "spinA", "spinB", "initialSeparation", "mergerConfiguration", "inclination"].includes(control.dataset.param) || (state.selected.id === "blackHole" && ["mass", "diskRadius"].includes(control.dataset.param)) || (state.selected.visual === "meson" && ["separation", "stringTension", "constituentMass"].includes(control.dataset.param))) rebuildSpecimen();
+    if (["beamA", "beamB", "processMode", "baryonNumber", "configuration", "binaryCount", "binaryMassA", "binaryMassB", "binaryMassC", "spinA", "spinB", "initialSeparation", "mergerConfiguration", "inclination", "coreCount"].includes(control.dataset.param) || (state.selected.id === "blackHole" && ["mass", "diskRadius"].includes(control.dataset.param)) || (state.selected.visual === "meson" && ["separation", "stringTension", "constituentMass"].includes(control.dataset.param))) rebuildSpecimen();
     if (state.selected.id === "blackHole" && state.view === "blackHoleMerger" && ["binaryCount", "binaryMassA", "binaryMassB", "binaryMassC", "spinA", "spinB", "initialSeparation", "mergerConfiguration", "inclination"].includes(control.dataset.param)) renderInspector();
     runLocalSolver();
     applyParameterDrivenVisuals();
@@ -2108,11 +2193,12 @@ function runInteraction() {
   const phaseDemo = state.selected.visual === "complexSpin" && state.values.configuration === "lattice" && state.view === "phaseDemo";
   const collisionMode = Boolean(state.collisionContext && isBaryonModel(state.selected));
   const blackHoleMerger = state.selected.id === "blackHole" && state.view === "blackHoleMerger";
+  const standingWaveCore = state.selected.visual === "standingWaveCore";
   if ((state.selected.interaction === "collision" || collisionMode) && state.solverResult?.state?.supported === false) {
     setStatus(`НЕПОДДЕРЖИВАЕМАЯ ПАРА · ${state.solverResult.state.reason}`, false);
     return;
   }
-  state.interaction = blackHoleMerger ? "blackHoleMerger" : phaseDemo ? "phaseDemo" : matrixPassage ? "matrixPassage" : collisionMode ? "collision" : state.selected.interaction;
+  state.interaction = blackHoleMerger ? "blackHoleMerger" : standingWaveCore ? "standingWaveResonance" : phaseDemo ? "phaseDemo" : matrixPassage ? "matrixPassage" : collisionMode ? "collision" : state.selected.interaction;
   state.blackHoleMergerRunning = blackHoleMerger;
   state.interactionTime = 0;
   state.interactionPhase = null;
@@ -2128,6 +2214,7 @@ function runInteraction() {
   else if (state.interaction === "stringBreak") buildStringBreakingEffect();
   else if (state.interaction === "collision") buildCollisionEffect();
   else if (state.interaction === "blackHoleMerger") rebuildSpecimen();
+  else if (state.interaction === "standingWaveResonance") { /* scene animation owns this educational resonance view */ }
   else buildBosonEffect();
   if (["collision", "blackHoleMerger"].includes(state.interaction)) renderInspector();
   setStatus(interactionStatusText(state.interaction), true);
@@ -2380,6 +2467,7 @@ function buildCollisionEffect() {
 }
 
 function interactionStatusText(type) {
+  if (type === "standingWaveResonance") return "STANDING-WAVE CORE · author-defined resonance excitation";
   if (type === "phaseDemo") return "PHASE-TO-SPIN PROJECTION · qualitative 3D demonstration";
   if (type === "photon") {
     const event = state.solverResult?.event;
@@ -2535,6 +2623,60 @@ function updateAnimations(time, dt) {
         item.spinArrow.visible = projection.axes.includes("i") && sliceRadius > .06;
         item.spinArrow.setLength(.22 + sliceRadius * 2.2, .28, .14);
       }
+    } else if (item.type === "standingWaveCore") {
+      const values = state.values;
+      const amplitude = Number(values.waveAmplitude ?? .62);
+      const frequency = Number(values.waveFrequency ?? .72);
+      const orbitalRadius = Number(values.coreOrbitRadius ?? 5.8);
+      const orbitalRate = Number(values.coreOrbitRate ?? .32);
+      const density = Number(values.nodeDensity ?? 3);
+      const stability = Number(values.resonanceStability ?? .84);
+      const active = state.interaction === "standingWaveResonance" ? 1 : .38;
+      const phase = t * frequency * Math.PI * 2;
+      const cross = values.polarization === "cross";
+      const elliptical = values.polarization === "elliptical";
+
+      item.holes.forEach((hole, index) => {
+        const angle = hole.phase + t * orbitalRate * (.3 + .7 * stability);
+        const offset = cross ? Math.PI / 4 : 0;
+        hole.group.position.set(
+          Math.cos(angle + offset) * orbitalRadius,
+          .13 * Math.sin(phase + index),
+          Math.sin(angle + offset) * orbitalRadius * .54
+        );
+        const pulse = 1 + .18 * amplitude * active * Math.cos(phase * 1.7 + index * Math.PI * 2 / item.count);
+        hole.group.scale.setScalar(pulse);
+        hole.photonRing.rotation.z += dt * (.7 + orbitalRate);
+        hole.lensedBand.rotation.y += dt * (.3 + orbitalRate * .5);
+      });
+
+      const positions = item.grid.geometry.attributes.position.array;
+      for (let index = 0; index < positions.length; index += 3) {
+        const x = item.baseGrid[index];
+        const z = item.baseGrid[index + 2];
+        const radius = Math.hypot(x, z);
+        const angle = Math.atan2(z, x);
+        const polarisation = cross ? Math.sin(2 * angle) : elliptical ? .65 + .35 * Math.cos(2 * angle + phase * .22) : Math.cos(2 * angle);
+        const standing = Math.sin(radius * (.52 + density * .17)) * Math.cos(phase);
+        positions[index] = x;
+        positions[index + 1] = item.baseGrid[index + 1] - amplitude * active * 1.55 * standing * polarisation;
+        positions[index + 2] = z;
+      }
+      item.grid.geometry.attributes.position.needsUpdate = true;
+      item.grid.material.opacity = Number(values.gridOpacity ?? .52);
+
+      item.fronts.forEach((front, index) => {
+        const envelope = .5 + .5 * Math.cos(phase * (1 + index * .11) + index);
+        const scale = (2.25 + index * 1.58) * (1 + amplitude * active * .18 * envelope);
+        front.scale.setScalar(scale);
+        front.material.opacity = Number(values.frontOpacity ?? .30) * (.3 + envelope * .7) * (index % 2 ? .82 : 1);
+        front.rotation.y += dt * (.08 + index * .015);
+      });
+      item.nodes.forEach((node, index) => {
+        const strength = .35 + .65 * Math.abs(Math.sin(phase + index * density * .34));
+        node.scale.setScalar(.55 + strength);
+        node.material.opacity = .25 + strength * .65;
+      });
     } else if (item.type === "tesseract") {
       const positions = item.geometry.attributes.position.array;
       if (state.values.tesseractMode === "projection") {
