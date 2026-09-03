@@ -2,13 +2,37 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { USDZLoader } from "three/addons/loaders/USDZLoader.js";
-import { modelRegistry, families, setCatalogLocale } from "./models.js?v=20260723-tesseract-slice-modes";
+import { modelRegistry, families, setCatalogLocale } from "./models.js?v=20260903-cloud-grover";
 import { solveModel, formatMetric } from "./solver.js?v=20260722e";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
+
+async function copyTextToClipboard(text) {
+  if (!text) return false;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (_) {
+    // Browser permissions can block the asynchronous Clipboard API even on a
+    // local page. Fall through to the selection-based compatibility path.
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  return copied;
+}
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const rand = (min, max) => min + Math.random() * (max - min);
+const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 const clock = new THREE.Clock();
 const gltfLoader = new GLTFLoader();
 const usdzLoader = new USDZLoader();
@@ -27,13 +51,24 @@ const state = {
   solverResult: null,
   solverMs: 0,
   backendOnline: false,
+  backendStatusPayload: null,
+  multiQuarkResult: null,
   visual: null,
   selectedComponent: null,
   confinementChoice: 0,
   confinementPulled: false,
   communicationOpen: false,
   communicationValues: { neutrinoRate: 80, photonRate: 55, energy: 10, rockThickness: 190, reflectivity: 96 },
-  blackHoleMergerRunning: false
+  blackHoleMergerRunning: false,
+  resonantTripleRunning: false,
+  resonantTripleStabilizerAdded: false,
+  resonantTwinStabilizerAdded: false,
+  resonantTripleActivationTime: null,
+  resonantTripleActivationProgress: 0,
+  resonantTripleActivationAngle: 0,
+  resonantTripleManualControl: false,
+  resonantTripleManualAngle: 0,
+  resonantTripleManualRadius: 1
 };
 setCatalogLocale(localStorage.getItem("qcd-neutrino-language") || "en");
 window.qcdLabState = state;
@@ -842,44 +877,33 @@ function createTesseract() {
 
 function createGravitationalStandingWaveCore() {
   const values = state.values;
-  const count = Number(values.coreCount || 8);
-  const radius = Number(values.coreOrbitRadius || 5.8);
-  const core = new THREE.Group();
-  const holes = [];
-  const orbitPoints = [];
-
-  for (let index = 0; index < 160; index += 1) {
-    const angle = (index / 160) * Math.PI * 2;
-    orbitPoints.push(new THREE.Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius * 0.54));
-  }
-  const orbit = new THREE.LineLoop(
-    new THREE.BufferGeometry().setFromPoints(orbitPoints),
-    new THREE.LineBasicMaterial({ color: 0x55e7ff, transparent: true, opacity: 0.28 })
+  const majorRadius = Number(values.torusMajorRadius || 5.25);
+  const tubeRadius = Number(values.torusTubeRadius || 1.5);
+  const coreGeometry = new THREE.TorusGeometry(majorRadius, tubeRadius, 48, 160);
+  const coreBase = Float32Array.from(coreGeometry.attributes.position.array);
+  const core = new THREE.Mesh(
+    coreGeometry,
+    new THREE.MeshPhysicalMaterial({
+      color: 0x4d94b8,
+      emissive: 0x06273c,
+      emissiveIntensity: 0.55,
+      metalness: 0.16,
+      roughness: 0.3,
+      clearcoat: 0.6,
+      clearcoatRoughness: 0.18,
+      transparent: false,
+      opacity: 1
+    })
   );
-  orbit.userData.pickable = false;
-  core.add(orbit);
-
-  for (let index = 0; index < count; index += 1) {
-    const group = new THREE.Group();
-    const horizon = new THREE.Mesh(
-      new THREE.SphereGeometry(0.38, 28, 20),
-      new THREE.MeshPhysicalMaterial({ color: 0x02040b, roughness: 0.15, metalness: 0.1, clearcoat: 0.8 })
-    );
-    const photonRing = new THREE.Mesh(
-      new THREE.TorusGeometry(0.57, 0.035, 8, 64),
-      new THREE.MeshBasicMaterial({ color: 0xffbd54, transparent: true, opacity: 0.88 })
-    );
-    photonRing.rotation.x = Math.PI / 2;
-    const lensedBand = new THREE.Mesh(
-      new THREE.TorusGeometry(0.49, 0.022, 8, 48),
-      new THREE.MeshBasicMaterial({ color: 0xff5e87, transparent: true, opacity: 0.55 })
-    );
-    lensedBand.rotation.set(0.72, 0.28, 0.22);
-    group.add(horizon, photonRing, lensedBand);
-    tagComponent(group, "gravitationalCoreNode", { index: index + 1, representation: "hypothetical compact horizon" });
-    core.add(group);
-    holes.push({ group, photonRing, lensedBand, phase: (index / count) * Math.PI * 2 });
-  }
+  // One opaque toroidal body: the surface carries the visual wave mode, while
+  // the interior intentionally remains unrepresented.
+  core.rotation.x = Math.PI / 2;
+  // Raise the closed body above the spacetime sheet so its oscillation remains
+  // legible even when the sheet itself has a strong central peak.
+  core.position.y = 0.82;
+  tagComponent(core, "gravitationalStandingWaveTorus", {
+    representation: "author-defined opaque toroidal standing-wave body; no interior microstructure is implied"
+  });
   specimen.add(core);
 
   const gridGeometry = new THREE.PlaneGeometry(23, 23, 48, 48);
@@ -889,7 +913,7 @@ function createGravitationalStandingWaveCore() {
     gridGeometry,
     new THREE.MeshBasicMaterial({ color: 0x81edff, wireframe: true, transparent: true, opacity: Number(values.gridOpacity ?? 0.52), depthWrite: false })
   );
-  grid.position.y = -1.65;
+  grid.position.y = -1.8;
   grid.userData.pickable = false;
   specimen.add(grid);
   fieldObjects.push(grid);
@@ -906,20 +930,7 @@ function createGravitationalStandingWaveCore() {
     fronts.push(front);
   }
 
-  const nodes = [];
-  for (let index = 0; index < 12; index += 1) {
-    const angle = (index / 12) * Math.PI * 2;
-    const node = new THREE.Mesh(
-      new THREE.SphereGeometry(0.07, 14, 10),
-      new THREE.MeshBasicMaterial({ color: 0xe8f8ff, transparent: true, opacity: 0.65 })
-    );
-    node.position.set(Math.cos(angle) * 3.2, 0.06, Math.sin(angle) * 3.2 * 0.54);
-    node.userData.pickable = false;
-    specimen.add(node);
-    nodes.push(node);
-  }
-
-  animated.push({ type: "standingWaveCore", core, holes, grid, baseGrid, fronts, nodes, count });
+  animated.push({ type: "standingWaveCore", core, coreBase, majorRadius, tubeRadius, grid, baseGrid, fronts });
 }
 
 function fitImportedAsset(asset, targetSize = 6.2) {
@@ -1102,8 +1113,8 @@ function createInteractiveBlackHoleVisual() {
   setStatus("INTERACTIVE WEBGL ACCRETION-DISK RENDERER · drag to orbit", true);
 }
 
-function createSpacetimeGrid() {
-  const geometry = new THREE.PlaneGeometry(31, 21, 76, 52);
+function createSpacetimeGrid(width = 31, depth = 21, widthSegments = 76, depthSegments = 52) {
+  const geometry = new THREE.PlaneGeometry(width, depth, widthSegments, depthSegments);
   const material = new THREE.MeshBasicMaterial({
     color: 0x65e9ff,
     wireframe: true,
@@ -1197,6 +1208,75 @@ function createBlackHoleMerger() {
   effects.add(remnant.group);
   animated.push({ type: "blackHoleMerger", a, b, c, bodies, remnant, remnantMass, orbit, wave, spacetime, masses, separation, count, configuration: values.mergerConfiguration || "quasiCircular" });
   setStatus("BINARY BLACK-HOLE INITIAL DATA · analytic local preview", true);
+}
+
+function createResonantTripleHypothesis() {
+  const values = state.values;
+  const masses = {
+    a: Number(values.centralMassA || 30),
+    b: Number(values.centralMassB || 28),
+    c: Number(values.tertiaryMass || 7)
+  };
+  const displayRadius = (mass) => clamp(.48 * Math.sqrt(mass / 30), .14, .82);
+  const centralA = createRelativisticBlackHole({ scale: displayRadius(masses.a), diskTilt: .08, compact: true });
+  const centralB = createRelativisticBlackHole({ scale: displayRadius(masses.b), diskTilt: -.12, compact: true });
+  const tertiary = createRelativisticBlackHole({ scale: displayRadius(masses.c), diskTilt: .24, compact: true });
+  const tertiaryTwin = createRelativisticBlackHole({ scale: displayRadius(masses.c), diskTilt: -.24, compact: true });
+  const tertiaryFlankA = createRelativisticBlackHole({ scale: displayRadius(masses.c * .9), diskTilt: .46, compact: true });
+  const tertiaryFlankB = createRelativisticBlackHole({ scale: displayRadius(masses.c * .9), diskTilt: -.46, compact: true });
+  const remnant = createRelativisticBlackHole({ scale: clamp(displayRadius(masses.a + masses.b) * 1.18, .3, 1.08), diskTilt: .04, compact: true });
+  remnant.group.visible = false;
+  // The four balancing bodies are part of the initial configuration, rather
+  // than being injected half-way through the visual experiment.
+  tertiary.group.visible = true;
+  tertiaryTwin.group.visible = true;
+  tertiaryFlankA.group.visible = true;
+  tertiaryFlankB.group.visible = true;
+  [centralA, centralB, tertiary, tertiaryTwin, tertiaryFlankA, tertiaryFlankB].forEach((body) => specimen.add(body.group));
+  effects.add(remnant.group);
+  primaryParticles.push(centralA.group, centralB.group, tertiary.group, tertiaryTwin.group, tertiaryFlankA.group, tertiaryFlankB.group, remnant.group);
+  const baseSeparation = clamp(Number(values.centralSeparation || 22) / 3.1, 3.6, 11.0);
+  const outerRadius = baseSeparation * 1.44;
+  const centralOrbit = new THREE.LineLoop(
+    new THREE.BufferGeometry().setFromPoints(new THREE.EllipseCurve(0, 0, baseSeparation * .42, baseSeparation * .23, 0, Math.PI * 2, false, 0).getPoints(128).map((point) => new THREE.Vector3(point.x, 0, point.y))),
+    new THREE.LineBasicMaterial({ color: 0x94dce6, transparent: true, opacity: .25 })
+  );
+  const tertiaryOrbit = new THREE.LineLoop(
+    new THREE.BufferGeometry().setFromPoints(new THREE.EllipseCurve(0, 0, outerRadius, outerRadius * .57, 0, Math.PI * 2, false, 0).getPoints(160).map((point) => new THREE.Vector3(point.x, .015, point.y))),
+    new THREE.LineBasicMaterial({ color: 0xd59cff, transparent: true, opacity: .2 })
+  );
+  tertiaryOrbit.visible = true;
+  const twinOrbit = tertiaryOrbit.clone();
+  twinOrbit.rotation.y = Math.PI;
+  twinOrbit.visible = true;
+  const flankOrbit = tertiaryOrbit.clone();
+  flankOrbit.rotation.y = Math.PI / 2;
+  flankOrbit.visible = true;
+  specimen.add(centralOrbit, tertiaryOrbit, twinOrbit, flankOrbit);
+  // This hypothesis is intentionally given a much broader embedding surface:
+  // the external perturber and the outgoing wavefronts need room around A+B.
+  const spacetime = createSpacetimeGrid(48, 34, 116, 80);
+  const wave = new THREE.Group();
+  for (let ringIndex = 0; ringIndex < 13; ringIndex += 1) {
+    const points = Array.from({ length: 100 }, (_, pointIndex) => {
+      const angle = pointIndex / 100 * Math.PI * 2;
+      return new THREE.Vector3(Math.cos(angle), Math.sin(angle) * (ringIndex % 2 ? .58 : .82), .05);
+    });
+    const ring = new THREE.Mesh(
+      new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points, true), 96, .022, 6, true),
+      new THREE.MeshBasicMaterial({ color: ringIndex % 2 ? 0xd4a2ff : 0x6cecff, transparent: true, opacity: .7, blending: THREE.AdditiveBlending, depthWrite: false })
+    );
+    ring.visible = false;
+    ring.rotation.z = ringIndex % 2 ? Math.PI / 2 : 0;
+    wave.add(ring);
+  }
+  effects.add(wave);
+  const mergerFlash = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0xfaf1bf, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+  mergerFlash.scale.set(.1, .1, 1);
+  wave.add(mergerFlash);
+  wave.userData.mergerFlash = mergerFlash;
+  animated.push({ type: "resonantTriple", centralA, centralB, tertiary, tertiaryTwin, tertiaryFlankA, tertiaryFlankB, remnant, masses, remnantMass: masses.a + masses.b, baseSeparation, outerRadius, centralOrbit, tertiaryOrbit, twinOrbit, flankOrbit, spacetime, wave });
+  setStatus("RESONANT TRIPLE HYPOTHESIS · controlled coplanar perturbation", true);
 }
 
 function createMacroObject(model) {
@@ -1369,6 +1449,59 @@ function createCrystalMatter() {
     specimen.add(link);
     fieldObjects.push(link);
   });
+}
+
+const moleculePresets = {
+  water: { atoms: [["O",0,.35,0],["H",-.78,-.28,0],["H",.78,-.28,0]], bonds: [[0,1],[0,2]] },
+  ammonia: { atoms: [["N",0,.28,0],["H",-.82,-.34,.42],["H",.82,-.34,.42],["H",0,-.34,-.86]], bonds: [[0,1],[0,2],[0,3]] },
+  methane: { atoms: [["C",0,0,0],["H",.82,.82,.82],["H",-.82,-.82,.82],["H",-.82,.82,-.82],["H",.82,-.82,-.82]], bonds: [[0,1],[0,2],[0,3],[0,4]] },
+  ethanol: { atoms: [["C",-1.25,0,0],["C",.15,0,0],["O",1.35,.45,0],["H",2.05,-.18,0],["H",-1.65,.75,.55],["H",-1.65,.05,-.95],["H",-1.65,-.85,.38],["H",.35,-.55,.88],["H",.35,-.55,-.88]], bonds: [[0,1],[1,2],[2,3],[0,4],[0,5],[0,6],[1,7],[1,8]] },
+  benzene: { atoms: Array.from({length:6},(_,i)=>["C",Math.cos(i*Math.PI/3)*1.45,Math.sin(i*Math.PI/3)*1.45,0]).concat(Array.from({length:6},(_,i)=>["H",Math.cos(i*Math.PI/3)*2.35,Math.sin(i*Math.PI/3)*2.35,0])), bonds: Array.from({length:6},(_,i)=>[i,(i+1)%6]).concat(Array.from({length:6},(_,i)=>[i,i+6])) }
+};
+
+function createMoleculeLab() {
+  const solved = state.solverResult?.kind === "quantum-chemistry" ? state.solverResult.state : null;
+  const fallback = moleculePresets[state.values.moleculePreset] || (state.values.moleculePreset === "caffeine" ? moleculePresets.benzene : moleculePresets.water);
+  const atoms = solved?.atoms?.map((atom) => [atom.element, atom.x, atom.y, atom.z]) || fallback.atoms;
+  const bonds = solved?.bonds?.map((bond) => [bond[0], bond[1]]) || fallback.bonds;
+  const materials = {
+    H: new THREE.MeshPhysicalMaterial({ color:0xf0f6f7, roughness:.24 }),
+    C: new THREE.MeshPhysicalMaterial({ color:0x34434c, roughness:.28, metalness:.08 }),
+    N: new THREE.MeshPhysicalMaterial({ color:0x397be8, emissive:0x0c2458, emissiveIntensity:.35 }),
+    O: new THREE.MeshPhysicalMaterial({ color:0xef5168, emissive:0x5a0814, emissiveIntensity:.32 })
+  };
+  const centre = atoms.reduce((sum, atom) => sum.add(new THREE.Vector3(atom[1], atom[2], atom[3])), new THREE.Vector3()).multiplyScalar(1 / atoms.length);
+  const scale = atoms.length > 8 ? 1.15 : 1.55;
+  const points = atoms.map((atom) => new THREE.Vector3(atom[1], atom[2], atom[3]).sub(centre).multiplyScalar(scale));
+  bonds.forEach(([a,b]) => {
+    const link = tubeBetween(points[a], points[b], new THREE.MeshPhysicalMaterial({ color:0x8bb6bf, transparent:true, opacity:.78, roughness:.25 }), .085);
+    specimen.add(link); fieldObjects.push(link);
+  });
+  atoms.forEach((atom, index) => {
+    const radius = atom[0] === "H" ? .28 : atom[0] === "C" ? .46 : .5;
+    const sphere = makeSphere(radius, materials[atom[0]] || mats.neutron, points[index].toArray(), 32);
+    tagComponent(sphere, "chemicalAtom", { element:atom[0], atomIndex:index + 1 });
+    specimen.add(sphere); primaryParticles.push(sphere);
+    animated.push({ type:"jitter", object:sphere, base:points[index].clone(), phase:index*.71, speed:.18 });
+  });
+  createShell(Math.max(3.5, 2.5 + atoms.length * .12), 3);
+}
+
+function createSemiconductorLab() {
+  const body = new THREE.Group();
+  const pMat = new THREE.MeshPhysicalMaterial({ color:0xee72d5, transparent:true, opacity:.54, roughness:.32 });
+  const nMat = new THREE.MeshPhysicalMaterial({ color:0x3dd4e7, transparent:true, opacity:.54, roughness:.32 });
+  const iMat = new THREE.MeshPhysicalMaterial({ color:0xf3d87b, transparent:true, opacity:.32, roughness:.32 });
+  const topology = state.values.deviceTopology || "pn";
+  const layers = topology === "pin" ? [["p",-3.15,2.7],["i",0,3.6],["n",3.15,2.7]] : topology === "npn" ? [["n",-3.3,2.4],["p",0,4.2],["n",3.3,2.4]] : [["p",-2.25,4.5],["n",2.25,4.5]];
+  layers.forEach(([type,x,width]) => { const layer=new THREE.Mesh(new THREE.BoxGeometry(width,2.8,3.4),type==="p"?pMat:type==="n"?nMat:iMat); layer.position.x=x; body.add(layer); });
+  for (let side=-1; side<=1; side+=2) for (let i=0;i<28;i+=1) {
+    const point = new THREE.Vector3(side*(.35+(i%7)*.55),-1.05+Math.floor(i/7)*.68,-.95+(i%3)*.92);
+    body.add(makeSphere(.085,side<0?mats.pion:mats.electron,point.toArray(),10));
+  }
+  const depletion = new THREE.Mesh(new THREE.BoxGeometry(topology === "pin" ? 3.7 : .72,3.05,3.65),new THREE.MeshBasicMaterial({color:0xf3d87b,transparent:true,opacity:.16,depthWrite:false}));
+  const arrow = new THREE.ArrowHelper(new THREE.Vector3(-1,0,0),new THREE.Vector3(1.7,0,1.9),3.4,0xf2bf5b,.32,.18);
+  body.add(depletion,arrow); body.rotation.x=-.18; specimen.add(body); primaryParticles.push(body); fieldObjects.push(depletion,arrow);
 }
 
 function createMultiquark(model) {
@@ -1622,17 +1755,20 @@ function rebuildSpecimen() {
   else if (model.visual === "standingWaveCore") createGravitationalStandingWaveCore();
   else if (model.visual === "polytope4d") createTesseract();
   else if (model.id === "blackHole" && state.view === "blackHoleMerger") createBlackHoleMerger();
+  else if (model.visual === "resonantTriple") createResonantTripleHypothesis();
   else if (model.visual === "macro") createMacroObject(model);
   else if (model.visual === "denseBaryons") createDenseBaryons();
   else if (model.visual === "hybridMatter") createHybridMatter(model);
   else if (model.visual === "condensateMatter") createCondensateMatter(model);
   else if (model.visual === "crystalMatter") createCrystalMatter(model);
+  else if (model.visual === "molecule") createMoleculeLab();
+  else if (model.visual === "semiconductor") createSemiconductorLab();
   else if (model.visual === "multiquark") createMultiquark(model);
   else if (model.visual === "meson") createMeson(model);
   else if (model.visual === "collider") createCollider(model);
   else if (["quarkFluid", "strangeMatter", "pairedMatter", "strangelet"].includes(model.visual)) createQuarkMedium(model);
   else if (model.visual === "neutrinoLens") createNeutrinoLens();
-  const cleanMacroStage = model.visual === "macro";
+  const cleanMacroStage = model.visual === "macro" || model.visual === "resonantTriple";
   const colliderMode = model.visual === "collider" || Boolean(state.collisionContext && isBaryonModel(model));
   platform.visible = !colliderMode && !cleanMacroStage;
   platformRing.visible = !colliderMode && !cleanMacroStage;
@@ -1670,7 +1806,9 @@ function renderCatalog() {
   const baseFamilies = families.filter(([id]) => !["ordinary", "exotic", "macro"].includes(id));
   const macroFamily = families.find(([id]) => id === "macro");
   const ordinaryFamilies = [["baryon", "Барионы"], ["lepton", "Лептоны"], ["nuclear", "Ядра и атомы"]];
-  const orderedFamilies = [...baseFamilies.slice(0, 1), ...ordinaryFamilies, ...baseFamilies.slice(1), families.find(([id]) => id === "exotic"), macroFamily].filter(Boolean);
+  const hypotheticalFamily = baseFamilies.find(([id]) => id === "hypothetical");
+  const remainingBaseFamilies = baseFamilies.filter(([id]) => id !== "hypothetical");
+  const orderedFamilies = [hypotheticalFamily, ...remainingBaseFamilies.slice(0, 1), ...ordinaryFamilies, ...remainingBaseFamilies.slice(1), families.find(([id]) => id === "exotic"), macroFamily].filter(Boolean);
   filters.innerHTML = orderedFamilies.map(([id, label]) => `<button type="button" class="${state.family === id ? "active" : ""}" data-family="${id}">${label}</button>`).join("");
   const query = state.search.trim().toLowerCase();
   const familyMatches = (model) => {
@@ -1705,6 +1843,38 @@ function renderCatalog() {
   }
 }
 
+function multiquarkLauncherPanel(model) {
+  if (model.visual !== "multiquark" || !Array.isArray(model.composition)) return "";
+  return `<section class="multiquark-launcher">
+    <span>MULTI-QUARK DISCOVERY</span>
+    <p>Открыть полный расчёт: квантовые числа, color-singlet/Pauli-фильтры, редукция базиса, эффективный гамильтониан, пороги распада и SystemVerilog-прототип аппаратного конвейера.</p>
+    <button id="openMultiQuarkLabBtn" class="solver-btn" type="button"><i data-lucide="binary"></i> Расчёт многокварковой системы</button>
+  </section>`;
+}
+
+function quantumGpuPanel(model) {
+  if (model.id !== "gpuQuantumSimulator") return "";
+  const result = state.solverResult?.kind === "gpu-quantum-statevector" ? state.solverResult : null;
+  if (!result) return `<section class="quantum-gpu-panel"><span>DIRECTML QUANTUM</span><p>Запустите расчёт: одинаковая state-vector схема будет выполнена на CPU и GPU, после чего интерфейс проверит fidelity, норму и реального execution provider.</p></section>`;
+  const q = result.state;
+  const outcomes = (q.topOutcomes || []).slice(0, 6).map((item) => `<li><code>|${escapeHtml(item.basis)}⟩</code><b>${(100 * Number(item.probability)).toFixed(3)}%</b><small>${item.count} shots</small></li>`).join("");
+  const cloud = q.cloudHardwareDemo;
+  const cloudPanel = cloud ? `<div class="quantum-cloud-demo">
+    <span>CLOUD-HARDWARE FRAGMENT · ${escapeHtml(cloud.executionState)}</span>
+    <h4>${escapeHtml(cloud.name)} → |${escapeHtml(cloud.targetState)}⟩</h4>
+    <p>Два кубита и стандартные H/X/CZ-гейты. Локальный GPU проверяет идеальный результат; отправка на реальный QPU выполняется отдельно через SamplerV2 и требует вашей облачной учётной записи.</p>
+    <div class="quantum-cloud-actions"><button id="copyQuantumQasmBtn" class="solver-btn" type="button">Копировать OpenQASM</button><button id="copyQuantumPythonBtn" class="solver-btn" type="button">Копировать Python</button></div>
+    <details><summary>OpenQASM 2.0</summary><pre><code>${escapeHtml(cloud.openQasm2)}</code></pre></details>
+    <details><summary>Qiskit Runtime · SamplerV2</summary><pre><code>${escapeHtml(cloud.qiskitSamplerV2Python)}</code></pre></details>
+    <small>${escapeHtml(cloud.credentialBoundary)}</small>
+  </div>` : "";
+  return `<section class="quantum-gpu-panel">
+    <span>DIRECTML QUANTUM · GPU #${q.selectedDeviceId}</span>
+    <div class="quantum-gpu-kpis"><div><small>кубиты</small><b>${q.qubits}</b></div><div><small>размерность</small><b>${mqCount(q.dimension)}</b></div><div><small>fidelity</small><b>${Number(q.fidelity).toFixed(9)}</b></div><div><small>GPU profile</small><b>${q.gpuNodeProviderConfirmed ? "CONFIRMED" : "NO"}</b></div></div>
+    <p>${escapeHtml(result.backendHint)}</p><ul>${outcomes}</ul>${cloudPanel}
+  </section>`;
+}
+
 function renderInspector() {
   const model = state.selected;
   renderViewModes(model);
@@ -1735,15 +1905,27 @@ function renderInspector() {
   const phaseDemo = isMFieldRegion && state.view === "phaseDemo";
   const blackHoleMerger = model.id === "blackHole" && state.view === "blackHoleMerger";
   const standingWaveCore = model.visual === "standingWaveCore";
-  $("#runInteractionBtn").hidden = (["macro", "polytope4d"].includes(model.visual) && !blackHoleMerger) || (model.visual === "complexSpin" && !matrixPassage && !phaseDemo);
+  const resonantTriple = model.visual === "resonantTriple";
+  const runInteractionButton = $("#runInteractionBtn");
+  runInteractionButton.hidden = (["macro", "polytope4d"].includes(model.visual) && !blackHoleMerger && !resonantTriple) || (model.visual === "complexSpin" && !matrixPassage && !phaseDemo);
   const runInteractionLabel = $("#runInteractionBtn span");
   if (runInteractionLabel) runInteractionLabel.textContent = matrixPassage ? ((localStorage.getItem("qcd-neutrino-language") || "en") === "ru" ? "Запустить зонд" : "Run probe") : interactionLabel(model);
 
   if (phaseDemo && runInteractionLabel) runInteractionLabel.textContent = (localStorage.getItem("qcd-neutrino-language") || "en") === "ru" ? "Р—Р°РїСѓСЃС‚РёС‚СЊ РґРµРјРѕРЅСЃС‚СЂР°С†РёСЋ" : "Run demonstration";
   if (blackHoleMerger && runInteractionLabel) runInteractionLabel.textContent = state.blackHoleMergerRunning ? "Restart merger" : "Start merger";
-  if (standingWaveCore && runInteractionLabel) runInteractionLabel.textContent = (localStorage.getItem("qcd-neutrino-language") || "en") === "ru" ? "Возбудить резонанс" : "Excite resonance";
+  if (resonantTriple && runInteractionLabel) runInteractionLabel.textContent = state.resonantTripleRunning ? "Restart binary merger" : "Start binary merger";
+  if (standingWaveCore) {
+    const language = localStorage.getItem("qcd-neutrino-language") || "en";
+    const label = state.paused
+      ? ({ ru: "Воспроизвести волны", he: "הפעלת גלים", en: "Play waves" }[language] || "Play waves")
+      : ({ ru: "Пауза волн", he: "השהיית גלים", en: "Pause waves" }[language] || "Pause waves");
+    // Some translated shells render this control without the original <span>.
+    // Update the button itself so the transport state is always visible.
+    runInteractionButton.textContent = label;
+    runInteractionButton.setAttribute("aria-label", label);
+  }
   const visibleParameters = model.parameters.filter((parameter) => {
-    const mFieldParameters = ["probeType", "mMode", "iPhase", "iCoupling", "leakage", "projectionCoherence"];
+    const mFieldParameters = ["probeType", "probeAxis", "fieldTension", "mMode", "iPhase", "iCoupling", "leakage", "projectionCoherence"];
     if (mFieldParameters.includes(parameter.key)) return isMFieldRegion;
     // The 4D projection controls describe only the isolated 4D quasiparticle.
     if (isMFieldRegion && ["projection", "positionX", "positionY", "positionZ", "positionI", "precession", "phaseOffset"].includes(parameter.key)) return false;
@@ -1765,7 +1947,7 @@ function renderInspector() {
       <label for="param-${parameter.key}"><span>${parameter.label}</span><output id="out-${parameter.key}">${formatParameter(value, parameter)}</output></label>
       <input id="param-${parameter.key}" data-param="${parameter.key}" type="range" min="${parameter.min}" max="${parameter.max}" step="${parameter.step}" value="${value}">
     </div>`;
-  }).join("") + (blackHoleMerger ? blackHoleMergerPanel() : "") + (isMFieldRegion ? mFieldProjectionPanel() : "") + (matrixPassage ? matrixPassageExplanation() : "") + (phaseDemo ? phaseDemoExplanation() : "") + (model.visual === "collider" ? `
+  }).join("") + (blackHoleMerger ? blackHoleMergerPanel() : "") + (resonantTriple ? resonantTriplePanel() : "") + (isMFieldRegion ? mFieldProjectionPanel() : "") + (matrixPassage ? matrixPassageExplanation() : "") + (phaseDemo ? phaseDemoExplanation() : "") + (model.visual === "collider" ? `
     <div class="collider-controls">
       <div class="collider-controls-title">Collider display</div>
       <label for="detectorOpacity"><span>Detector visibility</span><output id="detectorOpacityOut">${Math.round((state.values.detectorOpacity ?? 0) * 100)}%</output></label>
@@ -1773,10 +1955,17 @@ function renderInspector() {
       <label for="collisionSpeed"><span>Event speed</span><output id="collisionSpeedOut">${(state.values.collisionSpeed ?? 1).toFixed(2)}×</output></label>
       <input id="collisionSpeed" type="range" min="0.05" max="2" step="0.05" value="${state.values.collisionSpeed ?? 1}">
       <button id="colliderPauseBtn" class="solver-btn" type="button">${state.paused ? "Resume event" : "Pause event"}</button>
-  </div>` : "") + (model.visual === "collider" ? collisionExplanation() : "") + (isBaryonModel(model) && state.view === "confinement" ? confinementControls() : "");
+  </div>` : "") + (model.visual === "collider" ? collisionExplanation() : "") + (isBaryonModel(model) && state.view === "confinement" ? confinementControls() : "") + multiquarkLauncherPanel(model) + quantumGpuPanel(model);
   $("#parameterControls").querySelectorAll("[data-param]").forEach((control) => control.addEventListener(control.tagName === "SELECT" ? "change" : "input", () => {
     const parameter = model.parameters.find((item) => item.key === control.dataset.param);
     state.values[control.dataset.param] = parameter.type === "select" ? control.value : Number(control.value);
+    if (control.dataset.param === "quantumCircuit" && control.value === "grover2") {
+      state.values.quantumQubits = 2;
+      const qubitControl = $("#param-quantumQubits");
+      if (qubitControl) qubitControl.value = "2";
+      const qubitOutput = $("#out-quantumQubits");
+      if (qubitOutput) qubitOutput.textContent = "2";
+    }
     if (parameter.type !== "select") $(`#out-${control.dataset.param}`).textContent = formatParameter(Number(control.value), parameter);
     if (control.dataset.param === "configuration") {
       state.view = "structure";
@@ -1788,7 +1977,21 @@ function renderInspector() {
       state.values.processMode = "auto";
       renderInspector();
     }
-    if (["beamA", "beamB", "processMode", "baryonNumber", "configuration", "binaryCount", "binaryMassA", "binaryMassB", "binaryMassC", "spinA", "spinB", "initialSeparation", "mergerConfiguration", "inclination", "coreCount"].includes(control.dataset.param) || (state.selected.id === "blackHole" && ["mass", "diskRadius"].includes(control.dataset.param)) || (state.selected.visual === "meson" && ["separation", "stringTension", "constituentMass"].includes(control.dataset.param))) rebuildSpecimen();
+    const resonantTripleParameters = ["centralMassA", "centralMassB", "tertiaryMass", "centralSeparation", "outerTrajectory", "outerModulation", "curvatureDepth", "gridOpacity", "waveOpacity"];
+    if (state.selected.visual === "resonantTriple" && resonantTripleParameters.includes(control.dataset.param)) {
+      state.resonantTripleRunning = false;
+      state.resonantTripleStabilizerAdded = false;
+      state.resonantTwinStabilizerAdded = false;
+      state.resonantTripleActivationTime = null;
+      state.resonantTripleActivationProgress = 0;
+      state.resonantTripleActivationAngle = 0;
+      state.resonantTripleManualControl = false;
+      state.resonantTripleManualAngle = 0;
+      state.resonantTripleManualRadius = 1;
+      state.interaction = null;
+    }
+    if (["beamA", "beamB", "processMode", "baryonNumber", "configuration", "binaryCount", "binaryMassA", "binaryMassB", "binaryMassC", "spinA", "spinB", "initialSeparation", "mergerConfiguration", "inclination", "coreCount"].includes(control.dataset.param) || ["molecule", "semiconductor"].includes(state.selected.visual) || (state.selected.visual === "resonantTriple" && resonantTripleParameters.includes(control.dataset.param)) || (state.selected.id === "blackHole" && ["mass", "diskRadius"].includes(control.dataset.param)) || (state.selected.visual === "meson" && ["separation", "stringTension", "constituentMass"].includes(control.dataset.param))) rebuildSpecimen();
+    if (state.selected.visual === "resonantTriple" && resonantTripleParameters.includes(control.dataset.param)) renderInspector();
     if (state.selected.id === "blackHole" && state.view === "blackHoleMerger" && ["binaryCount", "binaryMassA", "binaryMassB", "binaryMassC", "spinA", "spinB", "initialSeparation", "mergerConfiguration", "inclination"].includes(control.dataset.param)) renderInspector();
     runLocalSolver();
     applyParameterDrivenVisuals();
@@ -1819,6 +2022,124 @@ function renderInspector() {
     renderInspector();
     setStatus("RANDOM PLANAR ORBIT LAYOUT · all bodies remain coplanar", true);
   });
+
+$("#addResonantStabilizerBtn")?.addEventListener("click", () => {
+  if (!state.resonantTripleRunning || state.resonantTripleStabilizerAdded) return;
+  const progress = clamp(state.interactionTime / getMergerDuration(), .08, .86);
+  state.resonantTripleStabilizerAdded = true;
+  state.resonantTripleActivationTime = state.interactionTime;
+  state.resonantTripleActivationProgress = progress;
+  state.resonantTripleActivationAngle = progress * (8 + progress * 20) * Math.PI;
+  state.resonantTripleManualControl = false;
+  state.resonantTripleManualAngle = 0;
+  state.resonantTripleManualRadius = 1;
+  rebuildSpecimen();
+  renderInspector();
+  setStatus("TERTIARY BLACK HOLE ADDED · distance-dependent tidal coupling", true);
+});
+
+$("#addResonantTwinBtn")?.addEventListener("click", () => {
+  if (!state.resonantTripleRunning || !state.resonantTripleStabilizerAdded || state.resonantTwinStabilizerAdded) return;
+  state.resonantTwinStabilizerAdded = true;
+  rebuildSpecimen();
+  renderInspector();
+  setStatus("SYMMETRIC BALANCING PAIR ADDED", true);
+});
+
+$("#resonantManualToggleBtn")?.addEventListener("click", () => {
+  if (!state.resonantTripleStabilizerAdded) return;
+  state.resonantTripleManualControl = !state.resonantTripleManualControl;
+  renderInspector();
+  setStatus(
+    state.resonantTripleManualControl
+      ? "TERTIARY MANUAL CONTROL · COPLANAR"
+      : "TERTIARY AUTOMATIC ORBIT · COPLANAR",
+    true,
+  );
+});
+
+$("#resonantTertiaryAngle")?.addEventListener("input", (event) => {
+  state.resonantTripleManualAngle = Number(event.target.value);
+  $("#resonantTertiaryAngleOut").textContent = `${Math.round(state.resonantTripleManualAngle)}°`;
+});
+
+$("#resonantTertiaryRadius")?.addEventListener("input", (event) => {
+  state.resonantTripleManualRadius = Number(event.target.value);
+  $("#resonantTertiaryRadiusOut").textContent = `${state.resonantTripleManualRadius.toFixed(2)}×`;
+});
+
+$("#removeResonantStabilizerBtn")?.addEventListener("click", () => {
+  if (!state.resonantTripleStabilizerAdded) return;
+  state.resonantTripleStabilizerAdded = false;
+  state.resonantTwinStabilizerAdded = false;
+  state.resonantTripleManualControl = false;
+  state.resonantTripleManualAngle = 0;
+  state.resonantTripleManualRadius = 1;
+  state.resonantTripleActivationTime = null;
+  state.resonantTripleActivationProgress = 0;
+  state.resonantTripleActivationAngle = 0;
+  rebuildSpecimen();
+  renderInspector();
+  setStatus("TERTIARY REMOVED · A+B INSPIRAL RESUMED", true);
+});
+// Inspector controls are reconstructed on every render; delegation keeps the
+// balancing-body controls alive after each state change.
+document.addEventListener("click", (event) => {
+  if (state.selected?.visual !== "resonantTriple") return;
+  const id = event.target.closest("button")?.id;
+  if (id === "addResonantStabilizerBtn") {
+    if (!state.resonantTripleRunning || state.resonantTripleStabilizerAdded) return;
+    const progress = clamp(state.interactionTime / getMergerDuration(), .08, .86);
+    state.resonantTripleStabilizerAdded = true;
+    state.resonantTripleActivationTime = state.interactionTime;
+    state.resonantTripleActivationProgress = progress;
+    state.resonantTripleActivationAngle = progress * (8 + progress * 20) * Math.PI;
+    state.resonantTripleManualControl = false;
+    state.resonantTripleManualAngle = 0;
+    state.resonantTripleManualRadius = 1;
+    rebuildSpecimen();
+    renderInspector();
+    setStatus("TERTIARY BLACK HOLE ADDED: distance-dependent tidal coupling", true);
+  } else if (id === "addResonantTwinBtn") {
+    if (!state.resonantTripleRunning || !state.resonantTripleStabilizerAdded || state.resonantTwinStabilizerAdded) return;
+    state.resonantTwinStabilizerAdded = true;
+    rebuildSpecimen();
+    renderInspector();
+    setStatus("SYMMETRIC BALANCING PAIR ADDED: coplanar fly-by enabled", true);
+  } else if (id === "resonantManualToggleBtn") {
+    if (!state.resonantTripleStabilizerAdded) return;
+    state.resonantTripleManualControl = !state.resonantTripleManualControl;
+    renderInspector();
+  } else if (id === "removeResonantStabilizerBtn") {
+    if (!state.resonantTripleStabilizerAdded) return;
+    state.resonantTripleStabilizerAdded = false;
+    state.resonantTwinStabilizerAdded = false;
+    state.resonantTripleManualControl = false;
+    state.resonantTripleManualAngle = 0;
+    state.resonantTripleManualRadius = 1;
+    state.resonantTripleActivationTime = null;
+    state.resonantTripleActivationProgress = 0;
+    state.resonantTripleActivationAngle = 0;
+    rebuildSpecimen();
+    renderInspector();
+    setStatus("BALANCING BODIES REMOVED: A+B inspiral resumed", true);
+  }
+});
+
+document.addEventListener("input", (event) => {
+  if (state.selected?.visual !== "resonantTriple") return;
+  if (event.target.id === "resonantTertiaryAngle") {
+    state.resonantTripleManualAngle = Number(event.target.value);
+    const out = $("#resonantTertiaryAngleOut");
+    if (out) out.textContent = `${Math.round(state.resonantTripleManualAngle)} deg`;
+  }
+  if (event.target.id === "resonantTertiaryRadius") {
+    state.resonantTripleManualRadius = Number(event.target.value);
+    const out = $("#resonantTertiaryRadiusOut");
+    if (out) out.textContent = `${state.resonantTripleManualRadius.toFixed(2)}x`;
+  }
+});
+
   $("#confinementRunBtn")?.addEventListener("click", () => {
     state.confinementPulled = true;
     state.interaction = "baryonConfinement";
@@ -1837,6 +2158,19 @@ function renderInspector() {
   }));
 
   $("#blackHoleBackendBtn")?.addEventListener("click", () => runBackendSolver());
+  $("#openMultiQuarkLabBtn")?.addEventListener("click", openMultiQuarkLab);
+  $("#copyQuantumQasmBtn")?.addEventListener("click", async () => {
+    const source = state.solverResult?.state?.cloudHardwareDemo?.openQasm2;
+    if (!source) return;
+    const copied = await copyTextToClipboard(source);
+    setStatus(copied ? "OPENQASM 2.0 · скопировано · облачная отправка не выполнялась" : "OPENQASM 2.0 · копирование заблокировано браузером", copied);
+  });
+  $("#copyQuantumPythonBtn")?.addEventListener("click", async () => {
+    const source = state.solverResult?.state?.cloudHardwareDemo?.qiskitSamplerV2Python;
+    if (!source) return;
+    const copied = await copyTextToClipboard(source);
+    setStatus(copied ? "QISKIT SAMPLERV2 · скопировано · добавьте собственные credentials" : "QISKIT SAMPLERV2 · копирование заблокировано браузером", copied);
+  });
   $("#sourceLinks").innerHTML = model.sources.map(([label, url]) => `<a href="${url}" target="_blank" rel="noreferrer"><span>${label}</span><i data-lucide="external-link" aria-hidden="true"></i></a>`).join("");
   if (model.id === "neutrinoLens" && state.communicationOpen) renderCommunicationControls();
   window.lucide?.createIcons();
@@ -1847,6 +2181,8 @@ function renderViewModes(model) {
   const ru = (localStorage.getItem("qcd-neutrino-language") || "en") === "ru";
   const labels = model.id === "blackHole"
     ? [["structure", "orbit", ru ? "Чёрная дыра" : "Black hole"], ["blackHoleMerger", "waves", ru ? "Симулятор слияния" : "Black-hole merger simulator"]]
+    : model.visual === "resonantTriple"
+    ? [["structure", "orbit", ru ? "Стабильная конфигурация (гипотеза)" : "Stable configuration (hypothesis)"]]
     : model.visual === "macro"
     ? [["structure", "orbit", ru ? "Объект" : "Object"]]
     : model.visual === "complexSpin"
@@ -1960,6 +2296,15 @@ function selectModel(id) {
   if (model.id !== "neutrinoLens") $("#communicationPanel").hidden = true;
   initializeValues(model);
   state.interaction = null;
+  state.resonantTripleRunning = false;
+  state.resonantTripleStabilizerAdded = false;
+  state.resonantTwinStabilizerAdded = false;
+  state.resonantTripleActivationTime = null;
+  state.resonantTripleActivationProgress = 0;
+  state.resonantTripleActivationAngle = 0;
+  state.resonantTripleManualControl = false;
+  state.resonantTripleManualAngle = 0;
+  state.resonantTripleManualRadius = 1;
   state.interactionTime = 0;
   renderCatalog();
   renderInspector();
@@ -1977,7 +2322,7 @@ window.addEventListener("qcd-language-change", (event) => {
 });
 
 function familyTitle(family) {
-  return ({ ordinary: "ordinary matter", dense: "dense matter", quark: "quark matter", meson: "meson spectroscopy", collider: "collider event lab", strange: "strange matter", hypothetical: "my hypotheses", macro: "macro objects" })[family] || family;
+  return ({ ordinary: "ordinary matter", dense: "dense matter", quark: "quark matter", meson: "meson spectroscopy", collider: "collider event lab", strange: "strange matter", hypothetical: "my hypotheses", macro: "macro objects", chemistry: "quantum chemistry", semiconductor: "semiconductor TCAD" })[family] || family;
 }
 
 function interactionLabel(model) {
@@ -1991,12 +2336,16 @@ function interactionLabel(model) {
   if (model.interaction === "stringBreak") return "Растянуть QCD-струну";
   if (model.id === "colliderWorkbench") return "Столкнуть выбранные пучки";
   if (model.interaction === "collision") return "Столкнуть протоны";
+  if (model.interaction === "quantumChemistry") return "Рассчитать электронную структуру";
+  if (model.interaction === "semiconductor") return "Решить p–n-переход";
+  if (model.interaction === "gpuCompute") return "Запустить GPU-расчёт";
   return "Возбудить глюонное поле";
 }
 
 function formatParameter(value, parameter) {
   if (parameter.type === "select") return String(value);
-  const decimals = parameter.step < .1 ? 2 : parameter.step < 1 ? 1 : 0;
+  const step = Number(parameter.step || 1);
+  const decimals = step >= 1 ? 0 : Math.min(6, Math.max(1, Math.ceil(-Math.log10(step))));
   return `${value.toFixed(decimals)}${parameter.unit ? ` ${parameter.unit}` : ""}`;
 }
 
@@ -2023,11 +2372,41 @@ function solveBlackHolePreview(values) {
   return { kind: "black-hole-merger", xLabel: "time relative to merger, s", yLabel: "dimensionless strain (normalised)", primaryLabel: "analytic inspiral + ringdown strain", secondaryLabel: "GW frequency", data, metrics: [["chirp mass", chirp, "M☉"], ["remnant mass", remnant, "M☉"], ["final spin χ", finalSpin, ""]], state: { supported: String(values.binaryCount || "2") === "2", chirpMass: chirp, schwarzschildA: 2.95325008 * m1, schwarzschildB: 2.95325008 * m2, remnantMass: remnant, finalSpin, mergerFrequency: fMerge }, event: { process: "binaryBlackHoleMerger", model: "leading-order inspiral + damped ringdown", initialSeparation: separation }, backendHint: "Einstein Toolkit waveform import / EinsteinPy geodesic adapter" };
 }
 
+function solveResonantTriplePreview(values) {
+  const a = Number(values.centralMassA || 30);
+  const b = Number(values.centralMassB || 28);
+  const c = Number(values.tertiaryMass || 7);
+  const total = a + b + c;
+  const separation = Number(values.centralSeparation || 22);
+  const modulation = Number(values.outerModulation || .68);
+  const chirp = Math.pow(a * b, .6) / Math.pow(a + b, .2);
+  const f0 = 4397 / Math.max(a + b, .1) * Math.pow(14 / Math.max(separation, 6), 1.5);
+  const data = Array.from({ length: 220 }, (_, index) => {
+    const time = index / 219 * 18;
+    const phase = time * f0 * .085;
+    const envelope = .25 + .65 * (1 + Math.sin(time * .52 + modulation * 1.4)) / 2;
+    const tertiaryModulation = 1 - .35 * modulation * (1 + Math.cos(time * .48)) / 2;
+    return { x: time, primary: envelope * tertiaryModulation * Math.sin(phase * 2 * Math.PI), secondary: f0 * (.7 + envelope) };
+  });
+  return {
+    kind: "resonant-triple-hypothesis",
+    xLabel: "illustrative time, s",
+    yLabel: "qualitative strain",
+    primaryLabel: "controlled quadrupolar-wave proxy",
+    secondaryLabel: "central-pair frequency proxy",
+    data,
+    metrics: [["central chirp mass", chirp, "M☉"], ["total input mass", total, "M☉"], ["outer / central mass", c / Math.max(a + b, .1), ""]],
+    state: { supported: true, chirpMass: chirp, totalMass: total, schwarzschildA: 2.95325008 * a, schwarzschildB: 2.95325008 * b, schwarzschildC: 2.95325008 * c },
+    event: { process: "resonantTripleHypothesis", model: "prescribed coplanar tertiary perturbation", centralSeparation: separation },
+    backendHint: "Numerical relativity is required for quantitative three-black-hole evolution."
+  };
+}
+
 function runLocalSolver() {
   const start = performance.now();
   const collisionModel = state.collisionContext ? modelRegistry.find((model) => model.id === "colliderWorkbench") : null;
   const collisionValues = state.collisionContext ? { ...state.values, ...state.collisionContext } : state.values;
-  state.solverResult = state.selected.id === "blackHole" && state.view === "blackHoleMerger" ? solveBlackHolePreview(state.values) : solveModel(collisionModel || state.selected, collisionValues);
+  state.solverResult = state.selected.visual === "resonantTriple" ? solveResonantTriplePreview(state.values) : state.selected.id === "blackHole" && state.view === "blackHoleMerger" ? solveBlackHolePreview(state.values) : solveModel(collisionModel || state.selected, collisionValues);
   state.solverMs = performance.now() - start;
   $("#telemetrySolver").textContent = `local / ${state.solverMs.toFixed(2)} ms`;
   $("#chartSubtitle").textContent = state.solverResult.primaryLabel;
@@ -2150,6 +2529,77 @@ function blackHoleMergerPanel() {
   </section>`;
 }
 
+function resonantTriplePanel() {
+  const a = Number(state.values.centralMassA || 30);
+  const b = Number(state.values.centralMassB || 28);
+  const c = Number(state.values.tertiaryMass || 7);
+  const running = state.resonantTripleRunning;
+  const locale = state.locale || "en";
+  const copy = locale === "ru" ? {
+    title: "Периодическая балансировка четырьмя телами · проектная гипотеза",
+    state: running ? "Автоматический цикл балансировки активен" : "Автоматическая балансирующая конфигурация готова",
+    first: "Два центральных горизонта следуют барицентрическому циклу сближения и пролёта, создавая качественный квадрупольный волновой отклик. Четыре более лёгкие балансирующие чёрные дыры присутствуют с самого начала на одной орбитальной плоскости; ни одно тело не добавляется вручную во время опыта.",
+    second: "Внешняя четвёрка движется по гладким фазово-заданным орбитам. Она подходит ближе всего около максимальной амплитуды центральной волны, создаёт симметричное приливное возмущение, а затем удаляется. Отображаемый цикл: сближение → пик волн → приливный пролёт → разлёт → новое сближение.",
+    mass: `Центральные массы: A = ${a.toFixed(1)} M☉, B = ${b.toFixed(1)} M☉. Масса каждого балансировщика — ${c.toFixed(1)} M☉; используются четыре тела, чтобы компенсировать ведущий сдвиг центра масс, сохраняя видимый своевременный приливный вклад.`,
+    scope: "Физические рамки:",
+    scopeText: "это управляемая копланарная учебная модель начальных условий. Реальная длительная многотельная эволюция чёрных дыр с реакцией излучения требует численной ОТО и обычно не является постоянно устойчивой. Поэтому приложение показывает предписанную траекторию обратной связи, а не заявляет о новом устойчивом астрофизическом решении.",
+    foot: "Кнопка «Запустить процесс» запускает или перезапускает полную конфигурацию. Центральные A+B показаны как гравитационно взаимодействующие тела; только внешняя четвёрка использует заданную траекторию обратной связи."
+  } : locale === "he" ? {
+    title: "איזון מחזורי בארבעה גופים · השערת פרויקט",
+    state: running ? "מחזור האיזון האוטומטי פעיל" : "תצורת האיזון האוטומטית מוכנה",
+    first: "שני האופקים המרכזיים נעים במחזור בריצנטרי של התקרבות ומעבר־חולף ומייצרים קירוב איכותי של גל כבידה קוודרופולי. ארבעה חורים שחורים מאזנים וקלים יותר קיימים מתחילת הניסוי באותו מישור מסלולי; שום גוף אינו נוסף ידנית במהלך ההרצה.",
+    second: "הרביעייה החיצונית נעה במסלולים חלקים המתוזמנים לפי פאזה. היא מתקרבת ביותר סמוך לשיא משרעת הגל המרכזי, יוצרת הפרעת גאות סימטרית ואז מתרחקת. המחזור המוצג הוא: התקרבות → שיא גלים → מעבר גאות → התרחקות → התקרבות חדשה.",
+    mass: `המסות המרכזיות: A = ${a.toFixed(1)} M☉, B = ${b.toFixed(1)} M☉. מסתו של כל גוף מאזן היא ${c.toFixed(1)} M☉; ארבעה גופים משמשים כדי לבטל את הדחף המוביל של מרכז המסה, תוך שמירה על תרומת גאות מתוזמנת ונראית.`,
+    scope: "תחום פיזיקלי:",
+    scopeText: "זהו מודל לימודי מבוקר וקו־מישורי של תנאי התחלה. אבולוציה אמיתית ארוכת־טווח של כמה חורים שחורים עם תגובת קרינה מחייבת יחסות נומרית ובדרך כלל אינה יציבה לצמיתות. לכן היישום מציג מסלול משוב מוגדר, ולא טענה לפתרון אסטרופיזי יציב חדש.",
+    foot: "הכפתור «הפעלת התהליך» מפעיל או מפעיל מחדש את התצורה המלאה. הזוג A+B מוצג כגופים בעלי אינטראקציה כבידתית; רק הרביעייה החיצונית משתמשת במסלול משוב מוגדר."
+  } : {
+    title: "Periodic six-black-hole balancing · project hypothesis",
+    state: running ? "Automatic balancing cycle active" : "Automatic balancing configuration ready",
+    first: "Two central horizons follow a barycentric approach–fly-by cycle and emit a qualitative quadrupole-wave proxy. Four lighter balancing black holes are present from the start on the same orbital plane; no body is manually injected during the run.",
+    second: "The outer quartet follows smooth, phase-scheduled orbital corrections. It approaches most closely near the maximum central-wave amplitude, applies a symmetric tidal perturbation, and then returns outward. The displayed cycle is: approach → peak wave emission → tidal fly-by → separation → next approach.",
+    mass: `Central masses: A = ${a.toFixed(1)} M☉, B = ${b.toFixed(1)} M☉. Each balancing body has ${c.toFixed(1)} M☉; four bodies are used so their leading centre-of-mass push cancels while their timed tidal contribution remains visible.`,
+    scope: "Physical scope:",
+    scopeText: "this is a controlled, coplanar educational initial-condition model. Real long-lived multi-black-hole systems with radiation reaction require numerical relativity and are generally not permanently stable. The application therefore shows a prescribed feedback trajectory, not a claimed new stable astrophysical solution.",
+    foot: "Use “Start process” to run or restart the complete configuration. Central A+B are displayed as gravitationally interacting bodies; only the outer quartet uses the designed feedback trajectory."
+  };
+  return `<section class="black-hole-merger-panel">
+    <div class="collider-controls-title">${copy.title}</div>
+    <strong>${copy.state}</strong>
+    <p>${copy.first}</p>
+    <p>${copy.second}</p>
+    <p>${copy.mass}</p>
+    <p><strong>${copy.scope}</strong> ${copy.scopeText}</p>
+    <small>${copy.foot}</small>
+  </section>`;
+  const path = ({ rosette: "rosette precession", libration: "co-orbital libration", horseshoe: "horseshoe-like passage" })[state.values.outerTrajectory] || "controlled planar path";
+  const started = state.resonantTripleRunning;
+  const added = state.resonantTripleStabilizerAdded;
+  const twinAdded = state.resonantTwinStabilizerAdded;
+  const manual = state.resonantTripleManualControl;
+  const complete = started && state.interactionTime >= getMergerDuration();
+  const manualControls = added ? `
+    <div class="collider-controls-title">Tertiary-body control</div>
+    <button id="resonantManualToggleBtn" class="solver-btn" type="button">${manual ? "Use automatic orbit" : "Take manual control"}</button>
+    <button id="removeResonantStabilizerBtn" class="solver-btn" type="button">Remove tertiary · resume A+B merger</button>
+    ${manual ? `<label class="param-row"><span>Planar angle <output id="resonantTertiaryAngleOut">${Math.round(state.resonantTripleManualAngle)}°</output></span><input id="resonantTertiaryAngle" type="range" min="-180" max="180" step="1" value="${state.resonantTripleManualAngle}" /></label>
+    <label class="param-row"><span>Orbital distance <output id="resonantTertiaryRadiusOut">${Number(state.resonantTripleManualRadius).toFixed(2)}×</output></span><input id="resonantTertiaryRadius" type="range" min="0.28" max="2.4" step="0.01" value="${state.resonantTripleManualRadius}" /></label>` : ""}
+    <small>Manual control remains coplanar. At large distance the tertiary tidal effect fades and A+B follows the ordinary merger. Removing the third body restores the A+B inspiral at its current separation.</small>` : "";
+  return `<section class="black-hole-merger-panel">
+    <div class="collider-controls-title">Stable configuration · project hypothesis</div>
+    <strong>${twinAdded ? "Symmetric two-body fly-by active" : added ? "Tertiary perturbation active" : "Base binary-inspiral mode"}</strong>
+    <p>Before the tertiary is added, A+B follows the same barycentric inspiral and outgoing quadrupole-wave visual logic as the ordinary binary-merger laboratory. The two horizons orbit their common centre of mass while their separation contracts.</p>
+    <button id="addResonantStabilizerBtn" class="solver-btn" type="button" ${(!started || added || complete) ? "disabled" : ""}>${added ? "Tertiary black hole added" : "Add tertiary black hole"}</button>
+    <button id="addResonantTwinBtn" class="solver-btn" type="button" ${(!started || !added || twinAdded || complete) ? "disabled" : ""}>${twinAdded ? "Symmetric balancing body added" : "Add symmetric second balancing body"}</button>
+    <p>${added ? `The lighter third body now follows the selected <strong>${path}</strong> path on the same plane. Its effect is tidal and depends on its distance: far away, A+B keeps the ordinary inspiral; nearby, the pair centre, orbital phase, and contraction rate are perturbed. This is not a proven permanent three-body equilibrium.` : (started ? "Add the tertiary during the inspiral to compare a distance-dependent perturbation with the base binary merger." : "Start the binary merger first; the third body is deliberately absent from the base state.")}</p>
+    ${twinAdded ? `<p>Two equal external black holes now make a symmetric, coplanar fly-by. Their effect is evaluated from distance and phase: if they remain far away, A+B still merges; only a close, timed pass can redirect the central pair into a non-merging scattering pass. This is a controlled initial-condition scenario, not a claimed generic four-body equilibrium.</p>` : ""}
+    ${manualControls}
+    <p>Schwarzschild radii are derived from the masses: rₛ(A) = ${(2.95325008 * a).toFixed(1)} km, rₛ(B) = ${(2.95325008 * b).toFixed(1)} km, rₛ(C) = ${(2.95325008 * c).toFixed(1)} km. Horizon size in the scene follows these masses.</p>
+    <p><strong>Physical scope:</strong> the changing third-body path is prescribed for an educational resonance demonstration. Full three-body evolution with gravitational radiation is chaotic and requires numerical relativity; this view does not claim a truly stable configuration that permanently prevents merger.</p>
+    <small>Use the trajectory and modulation controls to compare visually distinct coplanar perturbations. The continuous wavefronts are a qualitative quadrupole proxy, not a LIGO-ready waveform.</small>
+  </section>`;
+}
+
 function mFieldProjectionPanel() {
   const p = mFieldProjection();
   const rows = [
@@ -2165,15 +2615,22 @@ function matrixPassageExplanation() {
     photon: ["Photon", "refraction and phase shift", "The ray bends slightly while crossing the effective M-field."],
     electron: ["Electron", "potential deflection", "The charged probe follows the strongest curved trajectory in the displayed field."],
     neutrino: ["Neutrino", "phase delay", "The path remains nearly straight; the visible response is an exaggerated phase marker."],
+    protonPair: ["Proton pair", "effective repulsion control", "Two proton markers cross ordinary 3D space. The project M-field tension changes only their illustrative separation response."],
+    microBlackHole: ["Microscopic black hole", "effective trajectory control", "A compact test-body marker crosses ordinary 3D space. In the tensor (spin-2) preset, two markers are shown so the tension control can illustrate stronger or weaker pair convergence."],
     atom: ["Neutral atom", "energy-level shift", "The trajectory is weakly perturbed and the orbit marker changes scale in the field."]
   }[state.values.probeType] || ["Probe", "effective response", "Choose a probe interaction."];
+  const axis = {
+    i: "i-axis reference phase",
+    x: "x-axis transverse response",
+    y: "y-axis lateral response",
+    z: "z-axis longitudinal response"
+  }[state.values.probeAxis] || "i-axis reference phase";
   const mode = {
     scalar: ["Scalar M-quant", "a localized phase and effective-mass response is sampled within the bounded 3D volume."],
     vector: ["Vector M-quant", "the field supplies a direction-dependent effective response, shown as the strongest probe deflection."],
     standing: ["Distributed M-wave", "the field is a standing spatial mode: a probe couples to a distributed amplitude rather than to individual lattice dots."]
   }[state.values.mMode] || ["M-field", "Choose a field mode."];
-  return `<section class="collision-explanation"><div class="collider-controls-title">3D M-field passage · educational hypothesis</div><strong>${mode[0]}</strong><p>${mode[1]}</p><strong>${probe[0]}: ${probe[1]}</strong><p>${probe[2]}</p><small>The probe moves only through ordinary x, y, z space. The grid is a 3D sampling of a bounded M-field; it is not a set of visible 4D particles and no claim of a new interaction is made.</small></section>`;
-  return `<section class="collision-explanation"><div class="collider-controls-title">M-field passage · educational hypothesis</div><strong>${probe[0]}: ${probe[1]}</strong><p>${probe[2]}</p><small>This is a qualitative effective-medium demonstration for the proposed lattice, not an experimentally established 4D interaction.</small></section>`;
+  return `<section class="collision-explanation"><div class="collider-controls-title">3D M-field passage · educational hypothesis</div><strong>${mode[0]}</strong><p>${mode[1]}</p><strong>${probe[0]}: ${probe[1]}</strong><p>${probe[2]}</p><p><strong>Selected control:</strong> ${axis}; M-field tension ${Math.round((state.values.fieldTension ?? .58) * 100)}%.</p><small>The probe moves only through ordinary x, y, z space. The grid is a 3D sampling of a bounded M-field; it is not a set of visible 4D particles. These trajectory and pair responses are author-defined teaching analogies, not an experimentally established interaction or a simulation of microscopic black holes.</small></section>`;
 }
 
 function phaseDemoExplanation() {
@@ -2193,13 +2650,33 @@ function runInteraction() {
   const phaseDemo = state.selected.visual === "complexSpin" && state.values.configuration === "lattice" && state.view === "phaseDemo";
   const collisionMode = Boolean(state.collisionContext && isBaryonModel(state.selected));
   const blackHoleMerger = state.selected.id === "blackHole" && state.view === "blackHoleMerger";
+  const resonantTriple = state.selected.visual === "resonantTriple";
   const standingWaveCore = state.selected.visual === "standingWaveCore";
+  // The torus is continuously animated. Its primary action is therefore a
+  // real transport control, not a one-shot particle interaction.
+  if (standingWaveCore) {
+    $("#pauseBtn").click();
+    renderInspector();
+    setStatus(state.paused ? "WAVE FIELD PAUSED" : "WAVE FIELD PLAYING", true);
+    return;
+  }
   if ((state.selected.interaction === "collision" || collisionMode) && state.solverResult?.state?.supported === false) {
     setStatus(`НЕПОДДЕРЖИВАЕМАЯ ПАРА · ${state.solverResult.state.reason}`, false);
     return;
   }
-  state.interaction = blackHoleMerger ? "blackHoleMerger" : standingWaveCore ? "standingWaveResonance" : phaseDemo ? "phaseDemo" : matrixPassage ? "matrixPassage" : collisionMode ? "collision" : state.selected.interaction;
+  state.interaction = resonantTriple ? "resonantTriple" : blackHoleMerger ? "blackHoleMerger" : standingWaveCore ? "standingWaveResonance" : phaseDemo ? "phaseDemo" : matrixPassage ? "matrixPassage" : collisionMode ? "collision" : state.selected.interaction;
   state.blackHoleMergerRunning = blackHoleMerger;
+  state.resonantTripleRunning = resonantTriple;
+  if (resonantTriple) {
+    state.resonantTripleStabilizerAdded = false;
+    state.resonantTwinStabilizerAdded = false;
+    state.resonantTripleActivationTime = null;
+    state.resonantTripleActivationProgress = 0;
+    state.resonantTripleActivationAngle = 0;
+    state.resonantTripleManualControl = false;
+    state.resonantTripleManualAngle = 0;
+    state.resonantTripleManualRadius = 1;
+  }
   state.interactionTime = 0;
   state.interactionPhase = null;
   disposeGroup(effects);
@@ -2214,9 +2691,10 @@ function runInteraction() {
   else if (state.interaction === "stringBreak") buildStringBreakingEffect();
   else if (state.interaction === "collision") buildCollisionEffect();
   else if (state.interaction === "blackHoleMerger") rebuildSpecimen();
+  else if (state.interaction === "resonantTriple") rebuildSpecimen();
   else if (state.interaction === "standingWaveResonance") { /* scene animation owns this educational resonance view */ }
   else buildBosonEffect();
-  if (["collision", "blackHoleMerger"].includes(state.interaction)) renderInspector();
+  if (["collision", "blackHoleMerger", "resonantTriple"].includes(state.interaction)) renderInspector();
   setStatus(interactionStatusText(state.interaction), true);
   $("#telemetryState").textContent = state.solverResult?.event?.process || state.interaction;
 }
@@ -2267,19 +2745,24 @@ function buildPhaseProjectionDemo() {
 function buildMatrixPassageEffect() {
   const probeType = state.values.probeType || "photon";
   const modes = mFieldProjection();
+  const axisResponse = { i: .18, x: .92, y: -.78, z: .46 }[state.values.probeAxis] ?? .18;
+  const tension = Number(state.values.fieldTension ?? .58);
   const settings = {
     photon: { color: 0xf7c652, bend: .8, radius: .11, label: "photon · refracted through M-field" },
     electron: { color: 0xb28cff, bend: 1.65, radius: .14, label: "electron · deflected by M-field" },
     neutrino: { color: 0x54d8ff, bend: .13, radius: .09, label: "neutrino · phase-shifted through M-field" },
+    protonPair: { color: 0xff746b, bend: .42, radius: .18, label: "proton pair · illustrative M-field repulsion response" },
+    microBlackHole: { color: 0x05070a, bend: .55, radius: .28, label: "microscopic black-hole marker · illustrative M-field trajectory" },
     atom: { color: 0x63df9b, bend: .45, radius: .17, label: "atom · energy shift in M-field" }
   }[probeType];
+  const isPair = probeType === "protonPair" || (probeType === "microBlackHole" && state.values.mMode === "tensor");
   const points = [];
   for (let index = 0; index <= 120; index += 1) {
     const progress = index / 120;
     const x = THREE.MathUtils.lerp(-7.4, 7.4, progress);
     const vectorBend = .28 + modes.vector * 1.45;
     const tensorBend = modes.tensor * .48 * Math.sin(Math.PI * progress * 2);
-    const y = settings.bend * (vectorBend + tensorBend) * Math.sin(Math.PI * progress) * (probeType === "electron" ? Math.sin(Math.PI * progress) : 1);
+    const y = settings.bend * (vectorBend + tensorBend + axisResponse * .7) * Math.sin(Math.PI * progress) * (probeType === "electron" ? Math.sin(Math.PI * progress) : 1);
     const z = (probeType === "photon" ? .35 * Math.sin(Math.PI * progress * 2) : probeType === "atom" ? .2 * Math.sin(Math.PI * progress) : 0)
       + modes.tensor * .26 * Math.sin(Math.PI * progress * 2) + modes.scalar * .1 * Math.sin(Math.PI * progress * 5);
     points.push(new THREE.Vector3(x, y, z));
@@ -2287,13 +2770,35 @@ function buildMatrixPassageEffect() {
   const curve = new THREE.CatmullRomCurve3(points);
   const trail = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({ color: settings.color, transparent: true, opacity: .66 }));
   tagComponent(trail, probeType === "neutrino" ? "neutrino" : probeType, { role: settings.label, medium: "bounded 3D M-field / phase-to-spin projection" });
-  const probe = makeSphere(settings.radius, new THREE.MeshBasicMaterial({ color: settings.color }), points[0].toArray(), 16);
+  const probeMaterial = probeType === "microBlackHole"
+    ? new THREE.MeshStandardMaterial({ color: settings.color, roughness: .2, metalness: .05 })
+    : new THREE.MeshBasicMaterial({ color: settings.color });
+  const probe = makeSphere(settings.radius, probeMaterial, points[0].toArray(), 16);
   tagComponent(probe, probeType === "neutrino" ? "neutrino" : probeType, { role: settings.label, medium: "bounded 3D M-field / phase-to-spin projection" });
   const phaseRing = new THREE.Mesh(new THREE.TorusGeometry(.34, .025, 8, 40), new THREE.MeshBasicMaterial({ color: settings.color, transparent: true, opacity: .72 }));
   phaseRing.rotation.x = Math.PI / 2;
   phaseRing.visible = probeType === "neutrino" || probeType === "atom" || modes.scalar > .42;
-  effects.add(trail, probe, phaseRing);
-  animated.push({ type: "matrixProbe", object: probe, curve, trail, phaseRing, probeType, settings, phase: 0 });
+  if (!isPair) {
+    effects.add(trail, probe, phaseRing);
+    animated.push({ type: "matrixProbe", object: probe, curve, trail, phaseRing, probeType, settings, phase: 0 });
+    return;
+  }
+  const separation = probeType === "protonPair"
+    ? .7 + tension * 1.7 + modes.vector * .35
+    : .38 + (1 - tension) * .88;
+  const leftPoints = points.map((point, index) => point.clone().add(new THREE.Vector3(0, separation * (1 - index / 120), .12 * Math.sin(index / 120 * Math.PI))));
+  const rightPoints = points.map((point, index) => point.clone().add(new THREE.Vector3(0, -separation * (1 - index / 120), -.12 * Math.sin(index / 120 * Math.PI))));
+  const left = makeSphere(settings.radius, probeMaterial.clone(), leftPoints[0].toArray(), 18);
+  const right = makeSphere(settings.radius, probeMaterial.clone(), rightPoints[0].toArray(), 18);
+  const pairTrail = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: settings.color, transparent: true, opacity: .72 }));
+  pairTrail.geometry.setFromPoints([left.position, right.position]);
+  const leftHalo = new THREE.Mesh(new THREE.TorusGeometry(settings.radius * 1.85, .028, 8, 36), new THREE.MeshBasicMaterial({ color: probeType === "microBlackHole" ? 0xf7c652 : settings.color, transparent: true, opacity: .74 }));
+  leftHalo.rotation.x = Math.PI / 2;
+  const rightHalo = leftHalo.clone();
+  tagComponent(left, probeType === "microBlackHole" ? "blackHole" : "proton", { role: `${settings.label} · body A`, spinMode: state.values.mMode });
+  tagComponent(right, probeType === "microBlackHole" ? "blackHole" : "proton", { role: `${settings.label} · body B`, spinMode: state.values.mMode });
+  effects.add(trail, left, right, pairTrail, leftHalo, rightHalo);
+  animated.push({ type: "matrixProbePair", left, right, leftCurve: new THREE.CatmullRomCurve3(leftPoints), rightCurve: new THREE.CatmullRomCurve3(rightPoints), trail, link: pairTrail, leftHalo, rightHalo, probeType, tension });
 }
 
 function buildPhotonEffect() {
@@ -2529,6 +3034,159 @@ function pickSceneComponent(event) {
   hideComponentInfo();
 }
 
+// Controlled external trajectories, force-driven central binary.  This compact
+// educational N-body model is not numerical relativity: A and B receive only
+// gravity plus smooth radiation-reaction-inspired damping; no scripted stop or
+// position override is applied to either central horizon.
+function updateResonantTripleDynamics(item, dt) {
+  const running = state.interaction === "resonantTriple" && state.resonantTripleRunning;
+  const logicalDt = running ? Math.min(.014, Math.max(.001, dt * .34)) : 0;
+  const massScale = 1 / 20;
+  const mA = item.masses.a * massScale;
+  const mB = item.masses.b * massScale;
+  const mOuter = item.masses.c / 16;
+  const total = mA + mB;
+  const G = 5.2;
+  const softening2 = .34;
+  if (!item.physics) {
+    const separation = item.baseSeparation;
+    const orbitalSpeed = Math.sqrt(G * total / Math.max(separation, .1));
+    item.physics = {
+      time: 0,
+      a: new THREE.Vector3(-separation * mB / total, 0, 0),
+      b: new THREE.Vector3(separation * mA / total, 0, 0),
+      va: new THREE.Vector3(0, 0, orbitalSpeed * mB / total),
+      vb: new THREE.Vector3(0, 0, -orbitalSpeed * mA / total),
+      statusClock: 0
+    };
+  }
+  const physics = item.physics;
+  if (running) physics.time += logicalDt;
+  const modulation = clamp(Number(state.values.outerModulation ?? .68), 0, 1);
+  const relativeBeforeStep = physics.b.clone().sub(physics.a);
+  const separationBeforeStep = Math.max(relativeBeforeStep.length(), .1);
+  const radialDirection = relativeBeforeStep.multiplyScalar(1 / separationBeforeStep);
+  const radialRate = physics.vb.clone().sub(physics.va).dot(radialDirection);
+  const phase = physics.time * (.24 + modulation * .16);
+  // The controller only chooses trajectories for the outer bodies.  A+B are
+  // never placed on a prescribed path: they react to the Newtonian/1PN proxy
+  // force generated by the bodies that happen to be nearby.
+  const targetSeparation = item.baseSeparation * (1.02 + .13 * Math.sin(physics.time * .26));
+  const separationError = clamp((targetSeparation - separationBeforeStep) / item.baseSeparation, -.45, .45);
+  const brakingDemand = clamp(separationError * 1.9 - radialRate * .28, -.72, .72);
+  const outerRadius = item.outerRadius * (1.04 - .15 * Math.abs(brakingDemand) + .06 * Math.sin(phase * .7));
+  const rosette = (angle, scale = 1) => new THREE.Vector3(
+    Math.cos(angle) * outerRadius * scale,
+    0,
+    Math.sin(angle) * outerRadius * (.67 + .09 * Math.cos(phase * 1.7)) * scale
+  );
+  // Only these four positions are controlled.  The first opposite pair is
+  // placed along the instantaneous binary axis, so when A+B approach too
+  // quickly it produces an outward *tidal* pull.  The second pair is phase
+  // shifted and supplies a smooth torque.  Each opposite pair has zero net
+  // force at the barycentre; the central bodies move only under the resulting
+  // gravitational field, never by a position override.
+  const axisAngle = Math.atan2(radialDirection.z, radialDirection.x);
+  const radialAngle = axisAngle + .14 * Math.sin(phase * 1.6);
+  const torqueAngle = axisAngle + Math.PI / 4 + brakingDemand * .46 + .18 * Math.sin(phase * 1.13);
+  const radialScale = .72 - brakingDemand * .16;
+  const torqueScale = 1.02 + brakingDemand * .11;
+  const external = [
+    rosette(radialAngle, radialScale),
+    rosette(radialAngle + Math.PI, radialScale),
+    rosette(torqueAngle, torqueScale),
+    rosette(torqueAngle + Math.PI, torqueScale)
+  ];
+  const acceleration = (position, other, otherMass) => {
+    const delta = other.clone().sub(position);
+    return delta.multiplyScalar(G * otherMass / Math.pow(delta.lengthSq() + softening2, 1.5));
+  };
+  const calculateAcceleration = (position, companion, companionMass, selfVelocity, companionVelocity) => {
+    const result = acceleration(position, companion, companionMass);
+    external.forEach((body) => result.add(acceleration(position, body, mOuter)));
+    const relativeVelocity = selfVelocity.clone().sub(companionVelocity);
+    const separation2 = position.distanceToSquared(companion) + softening2;
+    // A continuous quadrupole-radiation proxy.  It is deliberately weak so
+    // it cannot create the visually abrupt braking produced by the old
+    // scripted phase curve.  This is not a replacement for numerical GR.
+    const damping = .0012 * Math.pow((item.baseSeparation * item.baseSeparation) / separation2, 1.1);
+    const pnFactor = 1 + clamp((3 * G * total) / (separation2 * 120), 0, .16);
+    return result.multiplyScalar(pnFactor).addScaledVector(relativeVelocity, -damping);
+  };
+  if (logicalDt) {
+    // Velocity-Verlet: A+B evolve from calculated forces rather than from a
+    // decorative prescribed orbit.
+    const aa0 = calculateAcceleration(physics.a, physics.b, mB, physics.va, physics.vb);
+    const ab0 = calculateAcceleration(physics.b, physics.a, mA, physics.vb, physics.va);
+    physics.a.addScaledVector(physics.va, logicalDt).addScaledVector(aa0, .5 * logicalDt * logicalDt);
+    physics.b.addScaledVector(physics.vb, logicalDt).addScaledVector(ab0, .5 * logicalDt * logicalDt);
+    const aa1 = calculateAcceleration(physics.a, physics.b, mB, physics.va, physics.vb);
+    const ab1 = calculateAcceleration(physics.b, physics.a, mA, physics.vb, physics.va);
+    physics.va.addScaledVector(aa0.add(aa1), .5 * logicalDt);
+    physics.vb.addScaledVector(ab0.add(ab1), .5 * logicalDt);
+  }
+  item.centralA.group.position.copy(physics.a);
+  item.centralB.group.position.copy(physics.b);
+  item.tertiary.group.position.copy(external[0]);
+  item.tertiaryTwin.group.position.copy(external[1]);
+  item.tertiaryFlankA?.group.position.copy(external[2]);
+  item.tertiaryFlankB?.group.position.copy(external[3]);
+  const relative = physics.b.clone().sub(physics.a);
+  const separation = relative.length();
+  const pairAngle = Math.atan2(relative.z, relative.x);
+  const centralSpeed = physics.va.clone().sub(physics.vb).length();
+  const waveStrength = clamp((centralSpeed * centralSpeed / Math.max(separation, .25)) * .12, .04, .72);
+  [item.centralA, item.centralB, item.tertiary, item.tertiaryTwin, item.tertiaryFlankA, item.tertiaryFlankB].filter(Boolean).forEach((body, index) => {
+    body.group.rotation.y += dt * (.9 + index * .1);
+    body.disk.rotation.y += dt * (1.25 + index * .11);
+    body.photonRing.rotation.z += dt * (.1 + index * .025);
+  });
+  item.centralOrbit.rotation.y = pairAngle;
+  item.tertiaryOrbit.rotation.y = phase;
+  item.twinOrbit.rotation.y = phase + Math.PI;
+  if (item.flankOrbit) item.flankOrbit.rotation.y = phase + Math.PI / 2;
+  const sources = [
+    { object: item.centralA.group, mass: item.masses.a }, { object: item.centralB.group, mass: item.masses.b },
+    { object: item.tertiary.group, mass: item.masses.c }, { object: item.tertiaryTwin.group, mass: item.masses.c },
+    { object: item.tertiaryFlankA.group, mass: item.masses.c * .9 }, { object: item.tertiaryFlankB.group, mass: item.masses.c * .9 }
+  ];
+  const position = item.spacetime.geometry.attributes.position;
+  const base = item.spacetime.base;
+  const depthScale = clamp(Number(state.values.curvatureDepth ?? 2.2), .5, 3.5);
+  const waveRadius = (physics.time * 5.5) % 21;
+  for (let vertex = 0; vertex < position.count; vertex += 1) {
+    const index3 = vertex * 3;
+    const x = base[index3];
+    const z = -base[index3 + 1];
+    const wells = sources.reduce((sum, source) => {
+      const d2 = (x - source.object.position.x) ** 2 + (z - source.object.position.z) ** 2;
+      return sum - 3.5 * depthScale * (source.mass / 30) / (1 + d2 * 1.16);
+    }, 0);
+    const radius = Math.hypot(x, z);
+    const azimuth = Math.atan2(z, x);
+    const quadrupole = Math.cos(2 * (azimuth - pairAngle)) * Math.sin(radius * 1.65 - physics.time * 4.7) * waveStrength * Math.exp(-radius * .11);
+    const outgoing = Math.cos(2 * (azimuth - pairAngle)) * Math.sin((radius - waveRadius) * 5.3) * waveStrength * .5 * Math.exp(-((radius - waveRadius) ** 2) / 2.2);
+    position.setZ(vertex, wells + quadrupole + outgoing);
+  }
+  position.needsUpdate = true;
+  item.spacetime.grid.material.opacity = clamp(Number(state.values.gridOpacity ?? .24), .03, .65);
+  const waveOpacity = clamp(Number(state.values.waveOpacity ?? .82), 0, 1);
+  item.wave.children.forEach((ring, index) => {
+    if (ring === item.wave.userData.mergerFlash) return;
+    const local = (physics.time * .36 - index * .1 + 1) % 1;
+    ring.visible = waveOpacity > .005;
+    const radius = .5 + local * (5.2 + index * .12);
+    ring.scale.set(radius, radius, radius);
+    ring.material.opacity = waveOpacity * waveStrength * Math.max(.04, (.82 - index * .03) * (1 - local));
+  });
+  item.wave.userData.mergerFlash.visible = false;
+  physics.statusClock += dt;
+  if (physics.statusClock > .3) {
+    setStatus(`FORCE-DRIVEN BINARY · separation ${separation.toFixed(2)} · outer tidal controller ${brakingDemand >= 0 ? "braking approach" : "releasing orbit"}`, true);
+    physics.statusClock = 0;
+  }
+}
+
 function updateAnimations(time, dt) {
   const visual = state.visual || deriveVisualState();
   const speed = (state.values.timeScale || state.values.decaySpeed || 1) * visual.motionSpeed * (state.selected.visual === "collider" ? (state.values.collisionSpeed ?? 1) : 1);
@@ -2580,6 +3238,24 @@ function updateAnimations(time, dt) {
       item.phaseRing.position.copy(item.object.position);
       item.phaseRing.rotation.z += dt * (item.probeType === "neutrino" ? 3.5 : 1.6);
       item.phaseRing.scale.setScalar(.8 + .28 * Math.sin(t * 6) ** 2);
+    } else if (item.type === "matrixProbePair") {
+      const progress = (state.interactionTime * .24) % 1;
+      item.left.position.copy(item.leftCurve.getPointAt(progress));
+      item.right.position.copy(item.rightCurve.getPointAt(progress));
+      const pulse = 1 + .12 * Math.sin(t * 5.2);
+      item.left.scale.setScalar(pulse);
+      item.right.scale.setScalar(pulse);
+      item.link.geometry.setFromPoints([item.left.position, item.right.position]);
+      item.link.material.opacity = .38 + .32 * Math.sin(t * 3.1) ** 2;
+      item.leftHalo.position.copy(item.left.position);
+      item.rightHalo.position.copy(item.right.position);
+      item.leftHalo.rotation.z += dt * (item.probeType === "microBlackHole" ? 1.4 : .6);
+      item.rightHalo.rotation.z -= dt * (item.probeType === "microBlackHole" ? 1.4 : .6);
+      const haloScale = item.probeType === "protonPair"
+        ? 1 + (1 - item.tension) * .3 + .1 * Math.sin(t * 3)
+        : .9 + item.tension * .24 + .08 * Math.sin(t * 3);
+      item.leftHalo.scale.setScalar(haloScale);
+      item.rightHalo.scale.setScalar(haloScale);
     } else if (item.type === "complexSpin" || item.type === "complexSpinLattice") {
       const projection = complexSpinProjection();
       const visiblePosition = projection.axes.map((axis) => projection.coordinates[axis]);
@@ -2627,28 +3303,50 @@ function updateAnimations(time, dt) {
       const values = state.values;
       const amplitude = Number(values.waveAmplitude ?? .62);
       const frequency = Number(values.waveFrequency ?? .72);
-      const orbitalRadius = Number(values.coreOrbitRadius ?? 5.8);
-      const orbitalRate = Number(values.coreOrbitRate ?? .32);
-      const density = Number(values.nodeDensity ?? 3);
+      const majorRadius = Number(values.torusMajorRadius ?? item.majorRadius);
+      const tubeRadius = Number(values.torusTubeRadius ?? item.tubeRadius);
+      const verticalHeight = Number(values.torusHeight ?? 1.15);
+      const density = Number(values.waveModeCount ?? 4);
       const stability = Number(values.resonanceStability ?? .84);
-      const active = state.interaction === "standingWaveResonance" ? 1 : .38;
+      const travellingPeak = values.wavePattern === "centralPeak";
+      const active = 1;
       const phase = t * frequency * Math.PI * 2;
       const cross = values.polarization === "cross";
       const elliptical = values.polarization === "elliptical";
 
-      item.holes.forEach((hole, index) => {
-        const angle = hole.phase + t * orbitalRate * (.3 + .7 * stability);
-        const offset = cross ? Math.PI / 4 : 0;
-        hole.group.position.set(
-          Math.cos(angle + offset) * orbitalRadius,
-          .13 * Math.sin(phase + index),
-          Math.sin(angle + offset) * orbitalRadius * .54
-        );
-        const pulse = 1 + .18 * amplitude * active * Math.cos(phase * 1.7 + index * Math.PI * 2 / item.count);
-        hole.group.scale.setScalar(pulse);
-        hole.photonRing.rotation.z += dt * (.7 + orbitalRate);
-        hole.lensedBand.rotation.y += dt * (.3 + orbitalRate * .5);
-      });
+      // Deform the *surface* of a solid torus in phase with the visual wave.
+      // This is deliberately an illustrative mode shape, not a GR solution.
+      const corePositions = item.core.geometry.attributes.position.array;
+      for (let index = 0; index < corePositions.length; index += 3) {
+        const x = item.coreBase[index];
+        const y = item.coreBase[index + 1];
+        const z = item.coreBase[index + 2];
+        const radial = Math.max(Math.hypot(x, y), .0001);
+        const azimuth = Math.atan2(y, x);
+        const tubeAngle = Math.atan2(z, radial - item.majorRadius);
+        const polarisation = cross ? Math.sin(2 * azimuth) : elliptical ? .72 + .28 * Math.cos(2 * azimuth + phase * .22) : Math.cos(2 * azimuth);
+        const wavePhase = travellingPeak
+          ? density * azimuth - phase * 1.25
+          : density * azimuth - phase;
+        const ripple = Math.sin(wavePhase) * Math.cos(tubeAngle * 2 + phase * .35) * polarisation;
+        const displacement = amplitude * active * .28 * ripple;
+        const radialScale = (radial + displacement) / radial;
+        corePositions[index] = x * radialScale;
+        corePositions[index + 1] = y * radialScale;
+        corePositions[index + 2] = z + displacement * .52 * Math.sin(tubeAngle);
+      }
+      item.core.geometry.attributes.position.needsUpdate = true;
+      item.core.geometry.computeVertexNormals();
+      const overallPulse = 1 + amplitude * active * .055 * Math.cos(phase);
+      // The major radius lives in the local x/y plane; the tube radius lives
+      // along local z. This keeps both torus-size controls visually honest.
+      item.core.scale.set(
+        (majorRadius / item.majorRadius) * overallPulse,
+        (majorRadius / item.majorRadius) * overallPulse,
+        (tubeRadius / item.tubeRadius) * verticalHeight * overallPulse
+      );
+      item.core.material.emissiveIntensity = .34 + amplitude * active * (.22 + .18 * Math.cos(phase));
+      item.core.rotation.z = .08 * amplitude * active * Math.sin(phase * .5) * stability;
 
       const positions = item.grid.geometry.attributes.position.array;
       for (let index = 0; index < positions.length; index += 3) {
@@ -2657,25 +3355,30 @@ function updateAnimations(time, dt) {
         const radius = Math.hypot(x, z);
         const angle = Math.atan2(z, x);
         const polarisation = cross ? Math.sin(2 * angle) : elliptical ? .65 + .35 * Math.cos(2 * angle + phase * .22) : Math.cos(2 * angle);
-        const standing = Math.sin(radius * (.52 + density * .17)) * Math.cos(phase);
+        // The travelling mode deliberately concentrates its largest visible
+        // displacement at r = 0, then sends concentric wave crests outward.
+        // It is a controllable educational field profile, not a GR solution.
+        const centralWidth = Math.max(majorRadius * .42, 1.1);
+        const standing = travellingPeak
+          ? Math.exp(-(radius * radius) / (centralWidth * centralWidth)) * Math.cos(phase - radius * (.82 + density * .1)) * 3.35
+          : Math.sin(radius * (.52 + density * .17)) * Math.cos(phase);
         positions[index] = x;
-        positions[index + 1] = item.baseGrid[index + 1] - amplitude * active * 1.55 * standing * polarisation;
+        // The central-peak profile is axisymmetric, so its strongest point stays
+        // visible at r = 0 regardless of the selected plus/cross convention.
+        positions[index + 1] = item.baseGrid[index + 1] - amplitude * active * 1.55 * standing * (travellingPeak ? 1 : polarisation);
         positions[index + 2] = z;
       }
       item.grid.geometry.attributes.position.needsUpdate = true;
       item.grid.material.opacity = Number(values.gridOpacity ?? .52);
 
       item.fronts.forEach((front, index) => {
-        const envelope = .5 + .5 * Math.cos(phase * (1 + index * .11) + index);
-        const scale = (2.25 + index * 1.58) * (1 + amplitude * active * .18 * envelope);
+        const envelope = travellingPeak
+          ? .35 + .65 * Math.cos(phase * 1.18 - index * .9)
+          : .5 + .5 * Math.cos(phase * (1 + index * .11) + index);
+        const scale = (2.25 + index * 1.58) * (1 + amplitude * active * (travellingPeak ? .3 : .18) * envelope);
         front.scale.setScalar(scale);
         front.material.opacity = Number(values.frontOpacity ?? .30) * (.3 + envelope * .7) * (index % 2 ? .82 : 1);
         front.rotation.y += dt * (.08 + index * .015);
-      });
-      item.nodes.forEach((node, index) => {
-        const strength = .35 + .65 * Math.abs(Math.sin(phase + index * density * .34));
-        node.scale.setScalar(.55 + strength);
-        node.material.opacity = .25 + strength * .65;
       });
     } else if (item.type === "tesseract") {
       const positions = item.geometry.attributes.position.array;
@@ -2908,6 +3611,177 @@ function updateAnimations(time, dt) {
       flash.visible = waveOpacity > .005 && burst > 0 && burst < 1;
       flash.material.opacity = waveOpacity * .86 * Math.sin(burst * Math.PI);
       flash.scale.setScalar(.4 + burst * 7.2);
+  } else if (item.type === "resonantTriple") {
+    updateResonantTripleDynamics(item, dt);
+    continue;
+      // Base state deliberately follows the binary-merger preview: a common
+      // barycentric inspiral with a chirping quadrupole wave train.  The third
+      // object is not present until the user explicitly adds it.
+      const running = state.interaction === "resonantTriple" && state.resonantTripleRunning;
+      const elapsed = running ? state.interactionTime : 0;
+      // A complete periodic cycle is used instead of a one-way merger.  The
+      // central binary still follows the same barycentric track; the outer
+      // quartet supplies a pre-arranged tidal fly-by near the close approach.
+      const cycleDuration = 13.8 / (.72 + .38 * clamp(Number(state.values.outerModulation ?? .68), 0, 1));
+      const rawProgress = running ? Math.min(.999, (elapsed / cycleDuration) % 1) : 0;
+      const stabilised = true;
+      const twinStabilised = true;
+      const manualTertiary = false;
+      const activationProgress = clamp(Number(state.resonantTripleActivationProgress || 0), .08, .86);
+      const afterActivation = elapsed;
+      const pairMass = item.masses.a + item.masses.b;
+      let tertiaryAngle = 0;
+      let tertiaryRadius = item.outerRadius;
+      const cycleEncounter = Math.exp(-Math.pow((rawProgress - .56) / .15, 2));
+      if (stabilised) {
+        if (manualTertiary) {
+          tertiaryAngle = THREE.MathUtils.degToRad(clamp(Number(state.resonantTripleManualAngle || 0), -180, 180));
+          tertiaryRadius *= clamp(Number(state.resonantTripleManualRadius || 1), .28, 2.4);
+        } else {
+          const outerPhase = afterActivation * (.19 + .12 * clamp(Number(state.values.outerModulation ?? .68), 0, 1));
+          if (state.values.outerTrajectory === "libration") {
+            tertiaryAngle = outerPhase + .34 * Math.sin(outerPhase * 1.45);
+            tertiaryRadius *= 1 + .09 * Math.cos(outerPhase * 2);
+          } else if (state.values.outerTrajectory === "horseshoe") {
+            tertiaryAngle = outerPhase + .53 * Math.sin(outerPhase * 1.15);
+            tertiaryRadius *= 1 + .16 * Math.cos(outerPhase);
+          } else {
+            tertiaryAngle = outerPhase + .31 * Math.sin(outerPhase * 2.35);
+            tertiaryRadius *= 1 + .14 * Math.cos(outerPhase * 2.7);
+          }
+        }
+      }
+      // The balancers come closer only during the chosen phase window.  Far
+      // from that window their tidal contribution falls rapidly as r^-3.
+      tertiaryRadius *= 1.2 - cycleEncounter * .42;
+      const tertiaryPosition = new THREE.Vector3(
+        Math.cos(tertiaryAngle) * tertiaryRadius,
+        0,
+        Math.sin(tertiaryAngle) * tertiaryRadius * .72,
+      );
+      // The second balancing body is the phase-opposed partner of the first.
+      // This keeps the prescribed intervention planar and avoids a hidden,
+      // magic force at the binary centre.
+      const twinPosition = tertiaryPosition.clone().multiplyScalar(-1);
+      const flankAngle = tertiaryAngle + Math.PI / 2;
+      const flankRadius = tertiaryRadius * (1.03 + .035 * Math.sin(afterActivation * .71));
+      const flankAPosition = new THREE.Vector3(
+        Math.cos(flankAngle) * flankRadius,
+        0,
+        Math.sin(flankAngle) * flankRadius * .72,
+      );
+      const flankBPosition = flankAPosition.clone().multiplyScalar(-1);
+      // The third body alters the binary only through a distance-dependent
+      // tidal term.  At a large separation this tends to zero, so A+B keeps
+      // the ordinary merger track; it never freezes merely because C exists.
+      const tertiaryDistance = stabilised ? Math.max(tertiaryPosition.length(), .35) : Infinity;
+      const oneBodyTidalStrength = stabilised
+        ? clamp((item.masses.c / pairMass) * Math.pow(item.baseSeparation / tertiaryDistance, 3) * 5.4, 0, .82)
+        : 0;
+      const tidalStrength = clamp(oneBodyTidalStrength * 4, 0, .96);
+      const closeFlyby = clamp(tidalStrength * 1.3, 0, 1);
+      const encounter = Math.exp(-Math.pow((rawProgress - .56) / .16, 2));
+      const escape = clamp((rawProgress - .56) / .28, 0, 1);
+      const progress = clamp(rawProgress - tidalStrength * .16 * (1 - rawProgress), 0, 1);
+      const eased = progress * progress * (3 - 2 * progress);
+      const baseAngle = progress * (8 + progress * 20) * Math.PI;
+      const angle = baseAngle + tidalStrength * .24 * Math.sin(tertiaryAngle - baseAngle) + closeFlyby * (.38 * encounter + .62 * escape);
+      const tidalStretch = 1 + tidalStrength * .16 * Math.cos(2 * (tertiaryAngle - baseAngle));
+      const unperturbedSeparation = THREE.MathUtils.lerp(item.baseSeparation, .05, eased) * tidalStretch;
+      const scatteringLift = closeFlyby * item.baseSeparation * (.24 * encounter + .72 * escape);
+      const separation = Math.max(.035, unperturbedSeparation + scatteringLift);
+      const relative = new THREE.Vector3(Math.cos(angle) * separation, 0, Math.sin(angle) * separation * .64);
+      const pairCentre = twinStabilised ? new THREE.Vector3() : tertiaryPosition.clone().multiplyScalar(tidalStrength * .18);
+      item.centralA.group.position.copy(pairCentre).addScaledVector(relative, -item.masses.b / pairMass);
+      item.centralB.group.position.copy(pairCentre).addScaledVector(relative, item.masses.a / pairMass);
+      const merged = rawProgress >= 1 && (!twinStabilised || closeFlyby < .14);
+      item.centralA.group.visible = !merged;
+      item.centralB.group.visible = !merged;
+      item.remnant.group.visible = merged;
+      item.remnant.group.position.copy(pairCentre);
+      item.centralOrbit.visible = !merged;
+      item.tertiary.group.position.copy(tertiaryPosition);
+      item.tertiary.group.visible = true;
+      item.tertiaryTwin.group.position.copy(twinPosition);
+      item.tertiaryTwin.group.visible = true;
+      if (item.tertiaryFlankA && item.tertiaryFlankB) {
+        item.tertiaryFlankA.group.position.copy(flankAPosition);
+        item.tertiaryFlankB.group.position.copy(flankBPosition);
+        item.tertiaryFlankA.group.visible = true;
+        item.tertiaryFlankB.group.visible = true;
+      }
+      item.tertiaryOrbit.visible = true;
+      item.twinOrbit.visible = true;
+      if (item.flankOrbit) item.flankOrbit.visible = true;
+      [item.centralA, item.centralB, item.tertiary, item.tertiaryTwin, item.tertiaryFlankA, item.tertiaryFlankB].filter(Boolean).forEach((body, index) => {
+        body.group.rotation.y += dt * (1.05 + progress * 4.1 + index * .08);
+        body.disk.rotation.y += dt * (1.45 + progress * 2.4 + index * .12);
+        body.photonRing.rotation.z += dt * (.15 + index * .05);
+      });
+      item.remnant.disk.rotation.y += dt * 3.1;
+      item.centralOrbit.rotation.y = angle;
+      item.tertiaryOrbit.rotation.y = tertiaryAngle * .18;
+      item.twinOrbit.rotation.y = tertiaryAngle * .18 + Math.PI;
+      if (item.flankOrbit) item.flankOrbit.rotation.y = tertiaryAngle * .18 + Math.PI / 2;
+
+      const sources = merged
+        ? [
+            { object: item.remnant.group, mass: item.remnantMass },
+            ...(stabilised ? [{ object: item.tertiary.group, mass: item.masses.c }] : []),
+            ...(twinStabilised ? [{ object: item.tertiaryTwin.group, mass: item.masses.c }] : [])
+          ]
+        : [
+            { object: item.centralA.group, mass: item.masses.a },
+            { object: item.centralB.group, mass: item.masses.b },
+            { object: item.tertiary.group, mass: item.masses.c },
+            { object: item.tertiaryTwin.group, mass: item.masses.c },
+            ...(item.tertiaryFlankA ? [{ object: item.tertiaryFlankA.group, mass: item.masses.c * .9 }] : []),
+            ...(item.tertiaryFlankB ? [{ object: item.tertiaryFlankB.group, mass: item.masses.c * .9 }] : [])
+          ];
+      const position = item.spacetime.geometry.attributes.position;
+      const base = item.spacetime.base;
+      const depthScale = clamp(Number(state.values.curvatureDepth ?? 2.2), .5, 3.5);
+      const wavePeak = Math.exp(-Math.pow((progress - .56) / .18, 2));
+      for (let vertex = 0; vertex < position.count; vertex += 1) {
+        const index3 = vertex * 3;
+        const x = base[index3];
+        const z = -base[index3 + 1];
+        const wells = sources.reduce((sum, source) => {
+          const distance2 = (x - source.object.position.x) ** 2 + (z - source.object.position.z) ** 2;
+          return sum - 3.5 * depthScale * (source.mass / 30) / (1 + distance2 * 1.16);
+        }, 0);
+        const r = Math.hypot(x, z);
+        const phi = Math.atan2(z, x);
+        // The qualitative signal peaks at the closest central fly-by, rather
+        // than at the arbitrary end of the display cycle.
+        const chirp = .045 + .34 * wavePeak;
+        const pulseRadius = Math.max(0, (progress - .56) * 23.5);
+        const quadrupole = Math.cos(2 * (phi - angle)) * Math.sin(r * 1.65 - elapsed * 4.5) * chirp * Math.exp(-r * .11);
+        const outgoing = pulseRadius > 0 ? Math.cos(2 * (phi - angle)) * Math.sin((r - pulseRadius) * 5.8) * .32 * Math.exp(-((r - pulseRadius) ** 2) / 1.5) : 0;
+        position.setZ(vertex, wells + quadrupole + outgoing);
+      }
+      position.needsUpdate = true;
+      item.spacetime.grid.material.opacity = clamp(Number(state.values.gridOpacity ?? .24), .03, .65);
+      const waveOpacity = clamp(Number(state.values.waveOpacity ?? .82), 0, 1);
+      item.wave.children.forEach((ring, index) => {
+        if (ring === item.wave.userData.mergerFlash) return;
+        const local = running ? (elapsed * .42 - index * .095 + 1) % 1 : -1;
+        ring.visible = local >= 0 && waveOpacity > .005;
+        if (merged) {
+          const radius = 2 + index * .48;
+          ring.scale.set(radius, radius, radius);
+          ring.material.opacity = waveOpacity * Math.max(.1, .48 - index * .026);
+        } else if (local >= 0) {
+          const growth = .42 + local * (5.1 + index * .07);
+          ring.scale.set(growth, growth, growth);
+          ring.material.opacity = waveOpacity * (.22 + .78 * wavePeak) * Math.max(.025, (.78 - index * .025) * (1 - local));
+        }
+      });
+      const flash = item.wave.userData.mergerFlash;
+      const burst = merged ? clamp((rawProgress - .88) / .12, 0, 1) : 0;
+      flash.visible = waveOpacity > .005 && burst > 0 && burst < 1;
+      flash.material.opacity = waveOpacity * .86 * Math.sin(burst * Math.PI);
+      flash.scale.setScalar(.4 + burst * 7.2);
     } else if (item.type === "beam") {
       const x = -8.5 + ((t * 2.4) % 17);
       item.object.position.x = x;
@@ -3070,12 +3944,14 @@ function updateAnimations(time, dt) {
   }
   if (state.interaction) {
     state.interactionTime += dt * speed;
+    if (state.interaction !== "resonantTriple") {
     const mergerDuration = state.interaction === "blackHoleMerger" ? getMergerDuration(state.values) : 9;
     if (state.interactionTime > mergerDuration) {
       if (state.interaction === "blackHoleMerger") state.interactionTime = mergerDuration;
       state.interaction = null;
       setStatus("Процесс завершён · результат обновлён", false);
       $("#telemetryState").textContent = state.selected.status;
+      }
     }
   }
 }
@@ -3093,14 +3969,180 @@ async function checkBackend() {
     if (!response.ok) throw new Error("offline");
     const data = await response.json();
     state.backendOnline = true;
-    $("#backendStatus").className = "online";
-    $("#backendStatus").innerHTML = `<i data-lucide="server"></i> backend: ${data.engine}`;
+    state.backendStatusPayload = data;
+    $("#backendStatus").className = "compute-status online";
+    const dispatch = data.scientific?.acceleration?.engine || data.engine;
+    $("#backendStatus").innerHTML = `<i data-lucide="server"></i> backend: ${escapeHtml(dispatch)}`;
   } catch {
     state.backendOnline = false;
-    $("#backendStatus").className = "offline";
+    state.backendStatusPayload = null;
+    $("#backendStatus").className = "compute-status offline";
     $("#backendStatus").innerHTML = `<i data-lucide="server-off"></i> backend: optional`;
   }
   window.lucide?.createIcons();
+}
+
+const computeModelMap = {
+  "NumPy/SciPy custom kernels": "directmlCompute",
+  "Waveform ensemble kernel": "gpuWaveformEnsemble",
+  "Finite-difference wave grid": "gpuWaveGrid",
+  "3D finite-difference wave volume": "gpuWaveGrid3d",
+  "Neutrino oscillation batch": "gpuNeutrinoBatch",
+  "RDKit + PySCF quantum chemistry": "quantumChemistryLab",
+  "DEVSIM semiconductor TCAD": "semiconductorDeviceLab",
+  "Multi-Quark SystemVerilog architecture": "multiQuarkWorkbench",
+  "Multi-quark DirectML threshold kernel": "multiQuarkWorkbench",
+  "Quantum state-vector simulator": "gpuQuantumSimulator"
+};
+
+function computeEngineKind(engine) {
+  if (engine.gpu) return "gpu";
+  if (/data source|contract|not installed/i.test(engine.execution || "")) return "data";
+  return "cpu";
+}
+
+function openComputeModal() {
+  const locale = localStorage.getItem("qcd-neutrino-language") || "en";
+  const copy = ({
+    en: { title: "Scientific compute centre", intro: "Actual state of the local CPU/GPU engines. Select an available GPU kernel to open its model.", backend: "Backend", gpu: "GPU", kernels: "GPU kernels", policy: "Dispatch policy", open: "open calculation", offline: "Backend unavailable", offlineText: "Start the local server and check again.", caveat: "The GPU is used only where its output is checked against a CPU reference. An installed package is not automatically a GPU package." },
+    ru: { title: "Центр научных вычислений", intro: "Фактическое состояние локальных CPU/GPU-движков. Выберите доступное GPU-ядро, чтобы открыть его модель.", backend: "Backend", gpu: "GPU", kernels: "GPU-ядра", policy: "Политика запуска", open: "открыть расчёт", offline: "Backend недоступен", offlineText: "Запустите локальный сервер и повторите проверку.", caveat: "GPU используется только там, где результат проверяется относительно CPU-эталона. Наличие пакета не означает, что весь пакет автоматически перенесён на видеокарту." },
+    he: { title: "מרכז חישובים מדעיים", intro: "המצב בפועל של מנועי ה־CPU וה־GPU המקומיים. בחרו ליבת GPU זמינה כדי לפתוח את המודל שלה.", backend: "שרת חישוב", gpu: "מעבד גרפי", kernels: "ליבות GPU", policy: "מדיניות הרצה", open: "פתיחת החישוב", offline: "שרת החישוב אינו זמין", offlineText: "יש להפעיל את השרת המקומי ולבדוק שוב.", caveat: "ה־GPU משמש רק כאשר התוצאה נבדקת מול ייחוס CPU. התקנת חבילה אינה מעבירה אוטומטית את כולה ל־GPU." }
+  })[locale] || null;
+  $("#computeModalTitle").textContent = copy.title;
+  $("#computeModalTitle").nextElementSibling.textContent = copy.intro;
+  $("#computeModal .compute-caveat").textContent = copy.caveat;
+  const payload = state.backendStatusPayload;
+  const acceleration = payload?.scientific?.acceleration;
+  const hardware = payload?.scientific?.hardware;
+  const engines = acceleration?.engines || [];
+  const gpuName = hardware?.displayAdapters?.[0]?.Name || "DirectX 12 adapter";
+  $("#computeSummary").innerHTML = `
+    <div class="accent"><span>${copy.backend}</span><b>${state.backendOnline ? "ONLINE" : "OFFLINE"}</b></div>
+    <div><span>${copy.gpu}</span><b>${escapeHtml(gpuName)}</b></div>
+    <div><span>${copy.kernels}</span><b>${acceleration ? `${acceleration.gpuPackages} / ${acceleration.totalPackages}` : "—"}</b></div>
+    <div><span>${copy.policy}</span><b>${acceleration ? "HYBRID" : "—"}</b></div>`;
+  $("#computeEngineGrid").innerHTML = engines.length ? engines.map((engine) => {
+    const kind = computeEngineKind(engine);
+    const model = computeModelMap[engine.package];
+    return `<button class="compute-engine" type="button" ${model ? `data-model="${model}"` : "disabled"}>
+      <span class="compute-engine-head"><h3>${escapeHtml(engine.package)}</h3><span class="compute-engine-badge ${kind}">${kind === "gpu" ? "GPU" : kind === "cpu" ? "CPU" : "DATA"}</span></span>
+      <p>${escapeHtml(engine.strategy)}</p><small>${escapeHtml(engine.execution)}${model ? ` · ${copy.open}` : ""}</small>
+    </button>`;
+  }).join("") : `<div class="compute-engine"><h3>${copy.offline}</h3><p>${copy.offlineText}</p></div>`;
+  $("#computeEngineGrid").querySelectorAll("[data-model]").forEach((button) => button.addEventListener("click", () => {
+    $("#computeModal").hidden = true;
+    state.family = "tool";
+    selectModel(button.dataset.model);
+  }));
+  $("#computeModal").hidden = false;
+  window.lucide?.createIcons();
+}
+
+function closeComputeModal() { $("#computeModal").hidden = true; }
+
+function mqCount(value) {
+  return new Intl.NumberFormat("ru-RU", { notation: Number(value) >= 1e9 ? "scientific" : "standard", maximumFractionDigits: 2 }).format(Number(value) || 0);
+}
+
+function mqClassificationClass(label) {
+  if (/unbound/i.test(label)) return "unbound";
+  if (/bound/i.test(label)) return "bound";
+  return "near";
+}
+
+function renderMultiQuarkResult(result) {
+  state.multiQuarkResult = result;
+  $("#mqExperimentId").textContent = `experiment ${result.experimentId}`;
+  const q = result.quantumNumbers;
+  $("#mqQuantumNumbers").innerHTML = [
+    `Q = ${Number(q.charge).toFixed(2)}`,
+    `B = ${Number(q.baryonNumber).toFixed(2)}`,
+    `S = ${q.strangeness}`,
+    `triality = ${q.triality}`,
+  ].map((value) => `<span>${escapeHtml(value)}</span>`).join("");
+  const maximum = Math.max(1, ...result.pipeline.map((stageItem) => Number(stageItem.count)));
+  $("#mqPipeline").innerHTML = result.pipeline.map((stageItem) => {
+    const ratio = Math.max(.035, Math.log10(Number(stageItem.count) + 1) / Math.log10(maximum + 1));
+    return `<div class="mq-stage" style="--stage-ratio:${ratio.toFixed(3)}"><span>${escapeHtml(stageItem.label)}</span><b>${mqCount(stageItem.count)}</b></div>`;
+  }).join("");
+  const bestId = result.bestCandidate?.id;
+  $("#mqCandidateRows").innerHTML = result.candidates.length ? result.candidates.slice(0, 16).map((candidate) => `<tr class="${candidate.id === bestId ? "best" : ""}">
+    <td>${escapeHtml(candidate.id)}</td><td>${candidate.J}<sup>${escapeHtml(candidate.parity)}</sup></td><td>${escapeHtml(candidate.colorChannel)}</td>
+    <td>${mqCount(candidate.basisDimension)}</td><td>${Number(candidate.energyMeV).toFixed(2)} ± ${Number(candidate.uncertaintyMeV).toFixed(2)}</td>
+    <td>${Number(candidate.bindingMarginMeV).toFixed(2)}</td><td class="${mqClassificationClass(candidate.classification)}">${escapeHtml(candidate.classification)}</td>
+  </tr>`).join("") : `<tr><td colspan="7">Все состояния отклонены физическими фильтрами.</td></tr>`;
+  const rtl = result.rtlVerification || {};
+  const gpu = result.gpuAcceleration || {};
+  $("#mqRtlBadge").textContent = String(rtl.status || "generated").toUpperCase();
+  $("#mqRtlBadge").classList.toggle("passed", rtl.status === "passed" || rtl.status === "compiled");
+  const hardware = result.hardware;
+  $("#mqHardwareStats").innerHTML = [
+    ["Язык", hardware.language], ["Цель", hardware.target], ["Оценка частоты", `${hardware.estimatedClockMHz} MHz`],
+    ["Оценка throughput", `${mqCount(hardware.estimatedCandidatesPerSecond)} cand/s`], ["RTL verification", rtl.status],
+    ["Статус оценки", hardware.measured ? "MEASURED" : "PROJECTED, NOT MEASURED"],
+    ["Raw Hilbert", mqCount(result.dimensions.rawHilbert)], ["Physical basis", mqCount(result.dimensions.physicalHilbert)],
+    ["Вычисление", gpu.used ? `DirectML GPU #${gpu.selectedDeviceId}` : (gpu.engine || "CPU")],
+    ["GPU profile", gpu.gpuNodeProviderConfirmed ? "CONFIRMED" : "not used"],
+    ["CPU / GPU", gpu.measured ? `${Number(gpu.cpuMedianMs).toFixed(3)} / ${Number(gpu.gpuMedianMs).toFixed(3)} ms` : "—"],
+    ["CPU↔GPU error", gpu.measured ? Number(gpu.maxRelativeError).toExponential(2) : "—"],
+  ].map(([label, value]) => `<div><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`).join("");
+  $("#mqSystemVerilog").textContent = result.systemVerilog;
+}
+
+async function runMultiQuarkSearch() {
+  const button = $("#mqRunBtn");
+  button.disabled = true;
+  $("#mqRunStatus").className = "mq-run-status running";
+  $("#mqRunStatus").textContent = "GENERATE → FILTER → REDUCE → ASSEMBLE → SCREEN → RTL";
+  try {
+    const values = {
+      composition: $("#mqComposition").value,
+      hamiltonianLevel: $("#mqHamiltonianLevel").value,
+      orbitalModes: Number($("#mqOrbitalModes").value),
+      colorSpinCoupling: Number($("#mqCoupling").value),
+      searchBudget: Number($("#mqSearchBudget").value),
+      computeBackend: $("#mqComputeBackend").value,
+      candidateLimit: 16,
+      hardwareTarget: $("#mqHardwareTarget").value,
+    };
+    const response = await fetch("./api/multiquark/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ values }) });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Multi-quark backend error");
+    renderMultiQuarkResult(payload.result);
+    const best = payload.result.bestCandidate;
+    $("#mqRunStatus").className = "mq-run-status";
+    $("#mqRunStatus").textContent = best
+      ? `Завершено · лучший ${best.id}: ${best.classification} · E = ${Number(best.energyMeV).toFixed(2)} ± ${Number(best.uncertaintyMeV).toFixed(2)} MeV`
+      : "Завершено · физически допустимых кандидатов не найдено";
+  } catch (error) {
+    $("#mqRunStatus").className = "mq-run-status error";
+    $("#mqRunStatus").textContent = `Ошибка: ${error.message}`;
+  } finally {
+    button.disabled = false;
+    window.lucide?.createIcons();
+  }
+}
+
+function openMultiQuarkLab() {
+  const model = state.selected;
+  if (Array.isArray(model.composition)) $("#mqComposition").value = model.composition.join(" ");
+  if (Number.isFinite(state.values.attraction)) $("#mqCoupling").value = clamp(state.values.attraction / 28, 0, 2).toFixed(2);
+  $("#mqCouplingOut").textContent = Number($("#mqCoupling").value).toFixed(2);
+  $("#multiquarkModal").hidden = false;
+  window.lucide?.createIcons();
+  runMultiQuarkSearch();
+}
+
+function closeMultiQuarkLab() { $("#multiquarkModal").hidden = true; }
+
+function downloadMultiQuarkSystemVerilog() {
+  const source = state.multiQuarkResult?.systemVerilog;
+  if (!source) return;
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([source], { type: "text/plain;charset=utf-8" }));
+  link.download = "multiquark_physics_frontend.sv";
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
 async function runBackendSolver() {
@@ -3119,8 +4161,11 @@ async function runBackendSolver() {
     state.solverResult = payload.result;
     state.solverMs = payload.elapsed_ms;
     $("#telemetrySolver").textContent = `backend / ${payload.elapsed_ms.toFixed(2)} ms`;
+    $("#chartSubtitle").textContent = state.solverResult.primaryLabel;
     renderMetrics();
     drawChart();
+    if (["molecule", "semiconductor"].includes(state.selected.visual)) rebuildSpecimen();
+    if (state.selected.id === "gpuQuantumSimulator") renderInspector();
     setStatus(`BACKEND · ${payload.engine} · завершено`, false);
   } catch (error) {
     setStatus(`Backend error · ${error.message}`, false);
@@ -3272,8 +4317,27 @@ $("#communicationSendBtn").addEventListener("click", () => {
   doc.getElementById("sendCommBtn")?.click();
 });
 setInterval(updateCommunicationMetrics, 500);
-$("#runInteractionBtn").addEventListener("click", runInteraction);
+$("#runInteractionBtn").addEventListener("click", () => {
+  if (["quantumChemistry", "semiconductor", "gpuCompute"].includes(state.selected.interaction)) runBackendSolver();
+  else runInteraction();
+});
 $("#backendSolveBtn").addEventListener("click", runBackendSolver);
+$("#backendStatus").addEventListener("click", openComputeModal);
+$("#computeModalClose").addEventListener("click", closeComputeModal);
+$("#computeModal").addEventListener("click", (event) => { if (event.target === $("#computeModal")) closeComputeModal(); });
+$("#multiquarkModalClose").addEventListener("click", closeMultiQuarkLab);
+$("#multiquarkModal").addEventListener("click", (event) => { if (event.target === $("#multiquarkModal")) closeMultiQuarkLab(); });
+$("#mqRunBtn").addEventListener("click", runMultiQuarkSearch);
+$("#mqOrbitalModes").addEventListener("input", (event) => { $("#mqOrbitalModesOut").textContent = event.target.value; });
+$("#mqCoupling").addEventListener("input", (event) => { $("#mqCouplingOut").textContent = Number(event.target.value).toFixed(2); });
+$("#mqDownloadSvBtn").addEventListener("click", downloadMultiQuarkSystemVerilog);
+$("#mqCopySvBtn").addEventListener("click", async () => {
+  const source = state.multiQuarkResult?.systemVerilog;
+  if (!source) return;
+  await copyTextToClipboard(source);
+  $("#mqCopySvBtn").textContent = "Скопировано";
+  setTimeout(() => { $("#mqCopySvBtn").textContent = "Копировать"; }, 1200);
+});
 $("#resetParamsBtn").addEventListener("click", () => { initializeValues(state.selected); renderInspector(); rebuildSpecimen(); runLocalSolver(); applyParameterDrivenVisuals(); });
 $("#closeComponentPopover").addEventListener("click", hideComponentInfo);
 canvas.addEventListener("pointerdown", (event) => { pointerStart = { x: event.clientX, y: event.clientY }; });
@@ -3350,7 +4414,7 @@ window.addEventListener("qcd-black-hole-merger-view", () => {
   renderInspector();
 });
 window.addEventListener("resize", resize);
-window.addEventListener("keydown", (event) => { if (event.key === "Escape") hideComponentInfo(); });
+window.addEventListener("keydown", (event) => { if (event.key === "Escape") { hideComponentInfo(); closeFormulaModal(); closeComputeModal(); } });
 
 initializeValues(state.selected);
 renderCatalog();

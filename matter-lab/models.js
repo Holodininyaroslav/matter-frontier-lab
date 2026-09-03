@@ -13,13 +13,163 @@ export const modelRegistry = [
     composition: ["u", "u", "d"],
     interaction: "boson",
     parameters: [
+      { key: "calculationMode", label: "Научный расчёт", type: "select", value: "cornell", options: [["cornell", "Cornell · потенциал кварков"], ["geant4", "Geant4 · транспорт фотона в кремнии"]] },
       { key: "alphaS", label: "Сильная связь αₛ", min: 0.15, max: 0.65, step: 0.01, value: 0.35 },
       { key: "stringTension", label: "Натяжение σ", unit: "GeV/fm", min: 0.4, max: 1.4, step: 0.01, value: 0.9 },
-      { key: "probeEnergy", label: "Энергия фотона", unit: "keV", min: 1, max: 900, step: 1, value: 120 }
+      { key: "probeEnergy", label: "Энергия фотона", unit: "keV", min: 1, max: 900, step: 1, value: 120 },
+      { key: "transportThicknessMm", label: "Толщина кремниевой мишени", unit: "mm", min: 0.1, max: 50, step: 0.1, value: 10 },
+      { key: "transportEvents", label: "События Geant4", min: 10, max: 1000, step: 10, value: 100 }
     ],
     sources: [
       ["PDG: Quark Model review", "https://pdg.lbl.gov/2022/reviews/rpp2022-rev-quark-model.pdf"],
-      ["PDG: Particle listings", "https://pdg.lbl.gov/"]
+      ["PDG: Particle listings", "https://pdg.lbl.gov/"],
+      ["Geant4 toolkit", "https://geant4.web.cern.ch/"]
+    ]
+  },
+  {
+    id: "directmlCompute",
+    family: "tool",
+    title: "DirectML GPU scientific test",
+    subtitle: "Dense Hamiltonian action on the local DirectX 12 GPU",
+    status: "computational",
+    statusLabel: "LOCAL GPU VALIDATION",
+    description: "A reproducible benchmark applies a dense discretized Hamiltonian H to a batch of states ψ on CPU and DirectML, checks numerical agreement, and verifies the ONNX profile assigned MatMul to DmlExecutionProvider.",
+    formula: "Y = HΨ; FLOP ≈ 2N²B",
+    applicability: "This validates one reusable linear-algebra block on the local AMD GPU. It does not by itself port Geant4, PYTHIA, nuSQuIDS, PyCBC or Einstein Toolkit to DirectML.",
+    visual: "unavailable",
+    interaction: "none",
+    parameters: [
+      { key: "matrixSize", label: "Hamiltonian dimension N", min: 256, max: 4096, step: 128, value: 3072 },
+      { key: "stateBatch", label: "State-vector batch B", min: 16, max: 512, step: 16, value: 384 },
+      { key: "benchmarkRepeats", label: "Timed repeats", min: 3, max: 30, step: 1, value: 8 },
+      { key: "benchmarkSeed", label: "Random seed", min: 1, max: 9999, step: 1, value: 17 }
+    ],
+    sources: [
+      ["ONNX Runtime DirectML Execution Provider", "https://onnxruntime.ai/docs/execution-providers/DirectML-ExecutionProvider.html"],
+      ["ONNX Runtime", "https://onnxruntime.ai/"]
+    ]
+  },
+  {
+    id: "gpuQuantumSimulator",
+    family: "tool",
+    title: "GPU-симулятор квантового компьютера",
+    subtitle: "Точный state-vector · ONNX Runtime DirectML",
+    status: "computational",
+    statusLabel: "GPU-VERIFIED QUANTUM SIMULATOR",
+    description: "Локальный симулятор собирает унитарную матрицу выбранной квантовой схемы и применяет её к пакету векторов состояния на Radeon RX 5500M через DirectML. Тот же ONNX-граф выполняется на CPU; амплитуды, норма и fidelity сравниваются при каждом запуске.",
+    formula: "|ψ_out⟩ = U_circuit |ψ_in⟩;  F = |⟨ψ_CPU|ψ_GPU⟩|²",
+    applicability: "Это точная идеальная state-vector симуляция малых схем, а не настоящий квантовый процессор. Плотная матрица масштабируется как O(4ⁿ), поэтому локальный режим ограничен десятью кубитами. Модель шума является настраиваемой смесью измерений, а не калибровкой реального устройства.",
+    visual: "unavailable",
+    interaction: "gpuCompute",
+    parameters: [
+      { key: "quantumCircuit", label: "Квантовая схема", type: "select", value: "ghz", options: [["bell", "Bell pair"], ["ghz", "GHZ state"], ["qft", "Quantum Fourier transform"], ["variational", "Variational ansatz"], ["grover2", "Grover 2-qubit · cloud hardware demo"]] },
+      { key: "quantumQubits", label: "Число кубитов", min: 2, max: 10, step: 1, value: 10 },
+      { key: "quantumBatch", label: "Пакет входных состояний", min: 8, max: 256, step: 8, value: 256 },
+      { key: "quantumShots", label: "Измерения", min: 128, max: 65536, step: 128, value: 4096 },
+      { key: "quantumNoise", label: "Модель шума измерения", min: 0, max: 0.2, step: 0.005, value: 0 },
+      { key: "variationalAngle", label: "Угол вариационного ansatz", unit: "rad", min: 0, max: 6.283, step: 0.01, value: 1.1 },
+      { key: "benchmarkRepeats", label: "Повторы профилирования", min: 2, max: 15, step: 1, value: 5 }
+    ],
+    sources: [
+      ["ONNX Runtime DirectML Execution Provider", "https://onnxruntime.ai/docs/execution-providers/DirectML-ExecutionProvider.html"],
+      ["Qiskit Aer statevector simulator concepts", "https://qiskit.github.io/qiskit-aer/"],
+      ["Microsoft Quantum Development Kit simulators", "https://learn.microsoft.com/azure/quantum/machines/" ],
+      ["IBM Quantum SamplerV2 hardware workflow", "https://quantum.cloud.ibm.com/docs/en/guides/sampler-examples"]
+    ]
+  },
+  {
+    id: "gpuWaveformEnsemble",
+    family: "tool",
+    title: "GPU gravitational-wave ensemble",
+    subtitle: "Batched quadrupole strain calculation on DirectML",
+    status: "computational",
+    statusLabel: "HYBRID GPU SCIENTIFIC KERNEL",
+    description: "A large ensemble of compact-binary strain samples is evaluated on the local DirectML GPU and independently on the CPU. The numerical outputs and execution-provider profile are checked on every run.",
+    formula: "h(t) = A f(t)^(2/3) cos(phi(t))",
+    applicability: "This accelerates the independent strain-algebra stage used after trajectory generation. It does not replace LALSuite waveform models or an Einstein Toolkit numerical-relativity evolution.",
+    visual: "unavailable",
+    interaction: "none",
+    parameters: [
+      { key: "waveformSystems", label: "Binary systems in ensemble", min: 64, max: 4096, step: 64, value: 2048 },
+      { key: "waveformSamples", label: "Samples per system", min: 256, max: 4096, step: 256, value: 2048 },
+      { key: "benchmarkRepeats", label: "Timed repeats", min: 3, max: 30, step: 1, value: 8 }
+    ],
+    sources: [
+      ["ONNX Runtime DirectML Execution Provider", "https://onnxruntime.ai/docs/execution-providers/DirectML-ExecutionProvider.html"],
+      ["Peters & Mathews quadrupole radiation", "https://doi.org/10.1103/PhysRev.131.435"],
+      ["PyCBC processing schemes", "https://pycbc.org/pycbc/latest/html/_modules/pycbc/scheme.html"]
+    ]
+  },
+  {
+    id: "gpuWaveGrid",
+    family: "tool",
+    title: "DirectML wave-field grid",
+    subtitle: "Finite-difference field evolution on the local AMD GPU",
+    status: "computational",
+    statusLabel: "GPU-VERIFIED NUMERICAL KERNEL",
+    description: "A damped scalar wave equation is evolved on a two-dimensional grid with a second-order centred finite-difference stencil. CPU and DirectML outputs are compared and the actual execution provider is read from the ONNX profile.",
+    formula: "uⁿ⁺¹ = (2−γ)uⁿ − (1−γ)uⁿ⁻¹ + C²Δₕuⁿ; C² ≤ 1/2",
+    applicability: "This is a genuine stable numerical PDE discretisation suitable as a reusable field-compute block. It is not the nonlinear Einstein equations and must not be interpreted as numerical relativity.",
+    visual: "unavailable",
+    interaction: "none",
+    parameters: [
+      { key: "waveGrid", label: "Square grid size", min: 64, max: 1536, step: 64, value: 768 },
+      { key: "waveSteps", label: "Time steps per dispatch", min: 4, max: 64, step: 2, value: 24 },
+      { key: "waveCourant", label: "Courant number C", min: 0.05, max: 0.7, step: 0.01, value: 0.62 },
+      { key: "waveDamping", label: "Damping γ", min: 0, max: 0.05, step: 0.001, value: 0.004 },
+      { key: "benchmarkRepeats", label: "Timed repeats", min: 3, max: 15, step: 1, value: 5 }
+    ],
+    sources: [
+      ["ONNX Runtime DirectML Execution Provider", "https://onnxruntime.ai/docs/execution-providers/DirectML-ExecutionProvider.html"],
+      ["Courant-Friedrichs-Lewy stability condition", "https://doi.org/10.1147/rd.11.0215"]
+    ]
+  },
+  {
+    id: "gpuWaveGrid3d",
+    family: "tool",
+    title: "DirectML 3D wave volume",
+    subtitle: "Three-dimensional finite-difference field on the local AMD GPU",
+    status: "computational",
+    statusLabel: "GPU-VERIFIED 3D NUMERICAL KERNEL",
+    description: "A scalar wave evolves throughout a Cartesian volume. A six-neighbour Laplacian is applied at every voxel and time step; CPU and DirectML results are compared and GPU node placement is confirmed from the ONNX profile.",
+    formula: "uⁿ⁺¹ = (2−γ)uⁿ − (1−γ)uⁿ⁻¹ + C²(δxx+δyy+δzz)uⁿ; C² ≤ 1/3",
+    applicability: "This is a genuine stable three-dimensional numerical PDE block for field experiments. It is not an evolution of the Einstein equations, a spacetime metric, numerical relativity or GRMHD.",
+    visual: "unavailable",
+    interaction: "none",
+    parameters: [
+      { key: "waveGrid3d", label: "Cubic grid edge", min: 32, max: 128, step: 8, value: 112 },
+      { key: "waveSteps3d", label: "Time steps per dispatch", min: 3, max: 24, step: 1, value: 12 },
+      { key: "waveCourant3d", label: "3D Courant number C", min: 0.05, max: 0.57, step: 0.01, value: 0.48 },
+      { key: "waveDamping3d", label: "Damping γ", min: 0, max: 0.05, step: 0.001, value: 0.004 },
+      { key: "benchmarkRepeats", label: "Timed repeats", min: 2, max: 8, step: 1, value: 3 }
+    ],
+    sources: [
+      ["ONNX Runtime DirectML Execution Provider", "https://onnxruntime.ai/docs/execution-providers/DirectML-ExecutionProvider.html"],
+      ["Courant-Friedrichs-Lewy stability condition", "https://doi.org/10.1147/rd.11.0215"]
+    ]
+  },
+  {
+    id: "gpuNeutrinoBatch",
+    family: "tool",
+    title: "GPU neutrino oscillation batch",
+    subtitle: "Standard two-flavour vacuum probabilities on DirectML",
+    status: "computational",
+    statusLabel: "GPU-VERIFIED PHYSICS KERNEL",
+    description: "A large independent set of neutrino baselines and energies is evaluated with the standard two-flavour vacuum-oscillation probability. CPU and DirectML outputs are compared and the GPU provider is verified from the runtime profile.",
+    formula: "P(να→νβ) = sin²(2θ) sin²(1.267 Δm² L/E)",
+    applicability: "This is a physically standard two-flavour vacuum approximation and a useful GPU batch kernel. General three-flavour propagation, matter effects, attenuation and regeneration remain in the nuSQuIDS CPU solver.",
+    visual: "unavailable",
+    interaction: "none",
+    parameters: [
+      { key: "neutrinoBatch", label: "Independent L/E samples", min: 65536, max: 4194304, step: 65536, value: 1048576 },
+      { key: "mixingAngle", label: "Mixing angle θ", unit: "rad", min: 0.05, max: 0.78, step: 0.01, value: 0.59 },
+      { key: "deltaMassSquared", label: "Mass splitting Δm²", unit: "eV²", min: 0.0001, max: 0.005, step: 0.00005, value: 0.00245 },
+      { key: "benchmarkRepeats", label: "Timed repeats", min: 3, max: 20, step: 1, value: 8 }
+    ],
+    sources: [
+      ["Particle Data Group — neutrino mixing review", "https://pdg.lbl.gov/2024/reviews/rpp2024-rev-neutrino-mixing.pdf"],
+      ["nuSQuIDS", "https://github.com/arguelles/nuSQuIDS"],
+      ["ONNX Runtime DirectML Execution Provider", "https://onnxruntime.ai/docs/execution-providers/DirectML-ExecutionProvider.html"]
     ]
   },
   {
@@ -422,6 +572,31 @@ export const modelRegistry = [
     sources: [["Color-flavor locked strangelets", "https://arxiv.org/abs/hep-ph/0108036"]]
   },
   {
+    id: "multiQuarkWorkbench",
+    family: "strange",
+    title: "Мультикварковая система",
+    subtitle: "Hybrid search · QCD constraints · FPGA/ASIC",
+    status: "hypothetical",
+    statusLabel: "ИССЛЕДОВАТЕЛЬСКАЯ ПЛАТФОРМА",
+    description: "Рабочая точка входа в Hybrid Multi-Quark Discovery Computer. Локальный уровень генерирует и фильтрует кандидатов, строит эффективную оценку энергии и каналов распада, сохраняет неопределённости и выпускает прототип потокового FPGA/ASIC-фильтра на SystemVerilog.",
+    formula: "H_eff = Σᵢmᵢ + Σᵢ<ⱼ κᵢⱼ(λᵢ·λⱼ)(Sᵢ·Sⱼ);  ΔE_c = E_threshold,c − E_candidate",
+    applicability: "Локальный расчёт является эффективным screening, а не lattice QCD. Кандидат нельзя называть физически устойчивым до независимой проверки Chroma/QUDA/Grid или сопоставимым валидированным workflow.",
+    visual: "multiquark",
+    composition: ["u", "u", "d", "d", "s", "s"],
+    interaction: "binding",
+    parameters: [
+      { key: "attraction", label: "Эффективная color-spin связь", unit: "rel.", min: 0, max: 56, step: 1, value: 28 },
+      { key: "range", label: "Радиус корреляции", unit: "fm", min: 0.2, max: 3, step: 0.01, value: 1.15 },
+      { key: "coreStrength", label: "Короткодействующий кор", unit: "MeV", min: 0, max: 120, step: 1, value: 48 }
+    ],
+    sources: [
+      ["multiquark-lattice-qcd — open flux-tube workflow", "https://github.com/ThinkOffApp/multiquark-lattice-qcd"],
+      ["Chroma lattice QCD", "https://github.com/JeffersonLab/chroma"],
+      ["QUDA GPU lattice QCD", "https://github.com/lattice/quda"],
+      ["SIMULATeQCD", "https://github.com/LatticeQCD/SIMULATeQCD"]
+    ]
+  },
+  {
     id: "hDibaryon",
     family: "strange",
     title: "H-дибарион",
@@ -774,7 +949,11 @@ export const modelRegistry = [
     visual: "neutrinoLens",
     interaction: "neutrino",
     parameters: [
+      { key: "neutrinoCalculationMode", label: "Научный расчёт", type: "select", value: "nusquids", options: [["nusquids", "nuSQuIDS · стандартные осцилляции"], ["hypothesis", "M-поле · авторская гипотеза"]] },
       { key: "neutrinoEnergy", label: "Энергия нейтрино", unit: "GeV", min: 0.1, max: 100, step: 0.1, value: 10 },
+      { key: "baselineKm", label: "База распространения", unit: "km", min: 10, max: 13000, step: 10, value: 1000 },
+      { key: "matterDensityGcm3", label: "Плотность обычной среды", unit: "g/cm³", min: 0, max: 13, step: 0.1, value: 3 },
+      { key: "initialFlavor", label: "Начальный аромат", type: "select", value: "muon", options: [["electron", "νe · электронный"], ["muon", "νμ · мюонный"], ["tau", "ντ · тау"]] },
       { key: "density", label: "Плотность ρ/ρ₀", min: 0, max: 20, step: 0.1, value: 6.5 },
       { key: "anisotropy", label: "Анизотропия a", min: 0, max: 1, step: 0.01, value: 0.62 },
       { key: "spinCoupling", label: "Гипотетическая связь κ", min: 0, max: 2, step: 0.01, value: 0.72 },
@@ -882,6 +1061,14 @@ const russianExoticCatalog = {
   'author-hypothesis-family':['Авторские гипотетические модели','Полная классификация — локальной 3D-модели нет','Программируемые атомы, нейтрино-чувствительная материя и нейтринные линзы, поляризационная и спин-программируемая материя, кварковые кристаллы, самособирающаяся странная материя, программируемые стрэнджлеты и информационно-связанная материя.']
 };
 
+russianExoticCatalog.gravitationalStandingWaveCore = [
+  'Гравитационный тор стоячих волн',
+  'Гипотетический непрозрачный тороидальный резонатор',
+  'Один большой сплошной тор. Его поверхность плавно деформируется синхронно с идеализированной стоячей гравитационной волной; внутренняя структура намеренно не показана.',
+  'Это авторская учебная гипотеза и визуальная демонстрация, а не решение уравнений Эйнштейна и не предсказание устойчивого объекта.',
+  'АВТОРСКАЯ ГИПОТЕЗА'
+];
+
 const hebrewTitles = {
   proton:'פרוטון', neutron:'נייטרון', hydrogen:'אטום מימן', helium4:'הליום‑4', hyperon:'היפרון למדא',
   neutronMatter:'חומר נייטרונים', qgp:'פלזמת קווארקים–גלואונים', mitBag:'חומר קווארקים מסוג MIT Bag', njl:'חומר קווארקים NJL',
@@ -902,7 +1089,9 @@ const hebrewTitles = {
   tauNeutrino:'נייטרינו טאו', tauAntineutrino:'אנטי־נייטרינו טאו'
 };
 
-hebrewTitles.gravitationalStandingWaveCore = "ליבת גלי כבידה עומדים";
+hebrewTitles.gravitationalStandingWaveCore = "טורוס גלי כבידה עומדים";
+hebrewTitles.resonantTripleBlackHole = "איזון מחזורי של שישה חורים שחורים (השערה)";
+hebrewTitles.gpuQuantumSimulator = "מדמה מחשב קוונטי על GPU";
 
 const hebrewFamilyTitles = {
   ordinary:'חלקיק רגיל', baryon:'בריון', lepton:'לפטון', nucleus:'גרעין או אטום', dense:'חומר צפוף', qgp:'פאזת QCD',
@@ -924,8 +1113,21 @@ export function setCatalogLocale(locale = 'en') {
         : model.status === 'catalog' ? 'רשומת קטלוג'
         : model.status === 'theoretical' ? 'מודל תאורטי' : 'הרחבה היפותטית';
       if (model.id === 'gravitationalStandingWaveCore') {
-        const labels = ['צמתי אופק קומפקטי', 'רדיוס מסלול', 'קצב מסלול', 'משרעת גל', 'תדירות גל עומד', 'צפיפות צמתים', 'סנכרון מופע', 'קיטוב גל', 'נראות רשת מרחב־זמן', 'נראות חזיתות גל'];
+        const labels = ['רדיוס ראשי של הטורוס', 'רדיוס הצינור של הטורוס', 'גובה הטורוס', 'תבנית גל', 'משרעת גל', 'תדירות גל', 'אופן גל טורואידי', 'יציבות תהודה', 'קיטוב גל', 'נראות רשת מרחב־זמן', 'נראות חזיתות גל'];
         model.parameters.forEach((parameter, index) => { parameter.label = labels[index] || parameter.label; });
+        const pattern = model.parameters.find((parameter) => parameter.key === 'wavePattern');
+        if (pattern) pattern.options = [['standing', 'גל עומד'], ['centralPeak', 'גל נע — שיא מרכזי']];
+      }
+      if (model.id === 'complexSpinQuasiparticle') {
+        model.title = 'חלקיק M';
+        model.subtitle = 'קוואזי־חלקיק 4D בעל ספין מרוכב · הקרנה אפקטיבית סימטרית־PT';
+        model.description = 'חלקיק M הוא קוואזי־חלקיק 4D היפותטי של הפרויקט בעל ספין מרוכב. ההקרנה התלת־ממדית ותגובות הגשוש משמשות להדגמה לימודית בלבד, ואינן חיזוי של חלקיק או אינטראקציה חדשה.';
+        const parameterLabels = {
+          configuration: 'תצורה', mMode: 'הגדרת הקרנה', iPhase: 'פאזת i φ',
+          iCoupling: 'עוצמת צימוד i', leakage: 'זליגת Im(s)', projectionCoherence: 'קוהרנטיות ההקרנה',
+          probeType: 'גשוש תלת־ממדי', probeAxis: 'ציר יעד של ספין M', fieldTension: 'מתיחות שדה M'
+        };
+        model.parameters.forEach((parameter) => { parameter.label = parameterLabels[parameter.key] || parameter.label; });
       }
       return;
     }
@@ -938,6 +1140,23 @@ export function setCatalogLocale(locale = 'en') {
       model.applicability = model.visual === 'unavailable'
         ? 'Это справочная запись. Локальная визуализация не показана, пока для конкретной системы нет проверяемой научной модели.'
         : model.applicability;
+    }
+    if (model.id === 'complexSpinQuasiparticle') {
+      model.title = 'M-частица';
+      model.subtitle = '4D-квазичастица с комплексным спином · PT-симметричная эффективная проекция';
+      model.description = 'M-частица — авторская гипотетическая 4D-квазичастица с комплексным спином. Её 3D-проекция и отклики зондов служат только учебной визуализацией и не являются предсказанием новой частицы или взаимодействия.';
+      const parameterLabels = {
+        configuration: 'Конфигурация', mMode: 'Предустановка проекции', iPhase: 'i-фаза φ',
+        iCoupling: 'Сила i-связи', leakage: 'Утечка Im(s)', projectionCoherence: 'Когерентность проекции',
+        probeType: '3D-зонд', probeAxis: 'Целевая ось M-спина', fieldTension: 'Напряжение M-поля'
+      };
+      model.parameters.forEach((parameter) => { parameter.label = parameterLabels[parameter.key] || parameter.label; });
+    }
+    if (model.id === 'gravitationalStandingWaveCore') {
+      const labels = ['Главный радиус тора', 'Радиус трубки тора', 'Высота тора', 'Режим волн', 'Амплитуда волны', 'Частота волны', 'Тороидальный волновой режим', 'Стабильность резонанса', 'Поляризация волны', 'Видимость сетки пространства-времени', 'Видимость фронтов волн'];
+      model.parameters.forEach((parameter, index) => { parameter.label = labels[index] || parameter.label; });
+      const pattern = model.parameters.find((parameter) => parameter.key === 'wavePattern');
+      if (pattern) pattern.options = [['standing', 'Стоячая волна'], ['centralPeak', 'Бегущая волна — центральный пик']];
     }
     if (model.status === 'catalog') model.statusLabel = 'ТОЛЬКО КАТАЛОГ';
     if (model.id === 'cosmicString') model.statusLabel = 'ЛОКАЛЬНОЙ 3D-МОДЕЛИ НЕТ';
@@ -983,7 +1202,7 @@ modelRegistry.push(...standardParticleRegistry.map(([id, family, title, subtitle
 modelRegistry.push(
   { id:'sun', family:'macro', title:'Sun', subtitle:'G-type main-sequence star', status:'confirmed', statusLabel:'OBSERVED STAR', description:'A locally rendered solar sphere using the texture from NASA’s downloadable Sun USDZ asset, with a restrained corona for readability.', formula:'L = 4πR²σT_eff⁴', applicability:'Visual representation only; it is not a magnetohydrodynamic solar calculation.', visual:'macro', macroKind:'sun', interaction:'field', parameters:[{key:'temperature',label:'Photosphere temperature',unit:'K',min:3500,max:7500,step:50,value:5772},{key:'activity',label:'Magnetic activity',min:0,max:1,step:.01,value:.42}], sources:[['NASA Sun 3D model (USDZ source texture)','https://science.nasa.gov/learn/heat/resource/sun-3d-model/'],['NASA 3D Resources','https://github.com/nasa/NASA-3D-Resources']] },
   { id:'jupiter', family:'macro', title:'Jupiter', subtitle:'Gas giant — hydrogen/helium atmosphere', status:'confirmed', statusLabel:'OBSERVED PLANET', description:'NASA glTF model, stored locally in this laboratory with its original mesh and texture.', formula:'v_esc = √(2GM/R);  P(r) = ∫ρg dr', applicability:'Imported visual asset; this is not an atmospheric fluid simulation.', visual:'macro', macroKind:'jupiter', interaction:'field', parameters:[{key:'rotationPeriod',label:'Rotation period',unit:'h',min:7,max:14,step:.1,value:9.9},{key:'bandContrast',label:'Band contrast',min:0,max:1,step:.01,value:.65}], sources:[['NASA Jupiter 3D model (glTF download)','https://science.nasa.gov/resource/jupiter-3d-model/'],['NASA Eyes on the Solar System','https://science.nasa.gov/eyes/']] },
-  { id:'blackHole', family:'macro', title:'Black hole', subtitle:'Interactive WebGL accretion disk and merger laboratory', status:'confirmed', statusLabel:'OBSERVED COMPACT OBJECT', description:'The object view is an orbitable local WebGL rendering: an event-horizon shadow, photon ring, Doppler-brightened accretion disk, and lensed images of the disk are generated inside the scene. It is informed by Eric Bruneton’s open real-time black-hole rendering work; the NASA SVS animation remains a cited scientific reference, not the displayed object.', formula:'r_s = 2GM/c²;  ds² = −(1−r_s/r)c²dt² + (1−r_s/r)⁻¹dr² + r²dΩ²', applicability:'This browser renderer is a qualitative Schwarzschild-inspired visual model, not a numerical-relativity calculation or the non-public Interstellar DNGR renderer. The merger waveform and spatial grid are illustrative analytic approximations; a traceable Einstein Toolkit or equivalent dataset is required for quantitative predictions.', visual:'macro', macroKind:'blackHole', interaction:'gravity', parameters:[{key:'mass',label:'Mass',unit:'M☉',min:3,max:10000000,step:1000,value:4300000},{key:'diskRadius',label:'Disk radius',unit:'r_s',min:2,max:14,step:.1,value:6},{key:'binaryCount',label:'Initial black-hole configuration',type:'select',value:'2',options:[['2','Wide binary — 2 bodies'],['3','Wide planar triple — 3 bodies'],['6','Planar six-body cluster — visual concept'],['9','Planar nine-body cluster — visual concept']]},{key:'binaryMassA',label:'Primary mass',unit:'M☉',min:5,max:120,step:.5,value:36},{key:'binaryMassB',label:'Secondary mass',unit:'M☉',min:5,max:120,step:.5,value:29},{key:'binaryMassC',label:'Tertiary mass',unit:'M☉',min:5,max:120,step:.5,value:18},{key:'spinA',label:'Primary dimensionless spin χ₁',min:-.95,max:.95,step:.01,value:.15},{key:'spinB',label:'Secondary dimensionless spin χ₂',min:-.95,max:.95,step:.01,value:-.1},{key:'initialSeparation',label:'Initial separation',unit:'r_g',min:18,max:90,step:1,value:52},{key:'mergerConfiguration',label:'Merger configuration',type:'select',value:'quasiCircular',options:[['quasiCircular','Quasi-circular inspiral'],['eccentric','Eccentric encounter'],['headOn','Head-on collision']]},{key:'inclination',label:'Viewing inclination',unit:'°',min:0,max:85,step:1,value:38},{key:'gridOpacity',label:'Spacetime grid visibility',unit:'%',min:0,max:.8,step:.01,value:.14},{key:'curvatureDepth',label:'Embedding depth',min:.35,max:2.5,step:.05,value:1.55},{key:'waveOpacity',label:'External gravitational-wave visibility',unit:'%',min:0,max:1,step:.01,value:.78}], sources:[['Eric Bruneton — interactive black-hole shader (BSD-3-Clause)','https://github.com/ebruneton/black_hole_shader'],['Bruneton, Real-time High-Quality Rendering of Non-Rotating Black Holes (2020)','https://ebruneton.github.io/black_hole_shader/paper.pdf'],['Einstein Toolkit Binary Black Hole Gallery','https://www.einsteintoolkit.org/gallery/bbh/index.html'],['Einstein Toolkit','https://einsteintoolkit.org/'],['EinsteinPy documentation','https://docs.einsteinpy.org/en/stable/'],['NASA SVS: Black Hole Accretion Disk Visualization','https://svs.gsfc.nasa.gov/13326/'],['NASA black-hole visualisation context','https://science.nasa.gov/universe/black-holes/supermassive-black-holes/new-nasa-black-hole-visualization-takes-viewers-beyond-the-brink/']] },
+  { id:'blackHole', family:'macro', title:'Black hole', subtitle:'Interactive WebGL accretion disk and merger laboratory', status:'confirmed', statusLabel:'OBSERVED COMPACT OBJECT', description:'The object view is an orbitable local WebGL rendering: an event-horizon shadow, photon ring, Doppler-brightened accretion disk, and lensed images of the disk are generated inside the scene. It is informed by Eric Bruneton’s open real-time black-hole rendering work; the NASA SVS animation remains a cited scientific reference, not the displayed object.', formula:'r_s = 2GM/c²;  ds² = −(1−r_s/r)c²dt² + (1−r_s/r)⁻¹dr² + r²dΩ²', applicability:'This browser renderer is a qualitative Schwarzschild-inspired visual model, not a numerical-relativity calculation or the non-public Interstellar DNGR renderer. The merger waveform can use PyCBC or the fixed official Einstein Toolkit GW150914 reference data.', visual:'macro', macroKind:'blackHole', interaction:'gravity', parameters:[{key:'waveformSource',label:'Scientific waveform backend',type:'select',value:'pycbc',options:[['pycbc','PyCBC / LALSuite · adjustable masses'],['einsteinToolkit','Einstein Toolkit · fixed GW150914 data']]},{key:'mass',label:'Mass',unit:'M☉',min:3,max:10000000,step:1000,value:4300000},{key:'diskRadius',label:'Disk radius',unit:'r_s',min:2,max:14,step:.1,value:6},{key:'binaryCount',label:'Initial black-hole configuration',type:'select',value:'2',options:[['2','Wide binary — 2 bodies'],['3','Wide planar triple — 3 bodies'],['6','Planar six-body cluster — visual concept'],['9','Planar nine-body cluster — visual concept']]},{key:'binaryMassA',label:'Primary mass',unit:'M☉',min:5,max:120,step:.5,value:36},{key:'binaryMassB',label:'Secondary mass',unit:'M☉',min:5,max:120,step:.5,value:29},{key:'binaryMassC',label:'Tertiary mass',unit:'M☉',min:5,max:120,step:.5,value:18},{key:'spinA',label:'Primary dimensionless spin χ₁',min:-.95,max:.95,step:.01,value:.15},{key:'spinB',label:'Secondary dimensionless spin χ₂',min:-.95,max:.95,step:.01,value:-.1},{key:'initialSeparation',label:'Initial separation',unit:'r_g',min:18,max:90,step:1,value:52},{key:'mergerConfiguration',label:'Merger configuration',type:'select',value:'quasiCircular',options:[['quasiCircular','Quasi-circular inspiral'],['eccentric','Eccentric encounter'],['headOn','Head-on collision']]},{key:'inclination',label:'Viewing inclination',unit:'°',min:0,max:85,step:1,value:38},{key:'gridOpacity',label:'Spacetime grid visibility',unit:'%',min:0,max:.8,step:.01,value:.14},{key:'curvatureDepth',label:'Embedding depth',min:.35,max:2.5,step:.05,value:1.55},{key:'waveOpacity',label:'External gravitational-wave visibility',unit:'%',min:0,max:1,step:.01,value:.78}], sources:[['Eric Bruneton — interactive black-hole shader (BSD-3-Clause)','https://github.com/ebruneton/black_hole_shader'],['Bruneton, Real-time High-Quality Rendering of Non-Rotating Black Holes (2020)','https://ebruneton.github.io/black_hole_shader/paper.pdf'],['Einstein Toolkit Binary Black Hole Gallery','https://www.einsteintoolkit.org/gallery/bbh/index.html'],['Einstein Toolkit GW150914 reference waveform','https://einsteintoolkit.org/gallery/bbh/refwaveform.csv'],['Einstein Toolkit','https://einsteintoolkit.org/'],['EinsteinPy documentation','https://docs.einsteinpy.org/en/stable/'],['NASA SVS: Black Hole Accretion Disk Visualization','https://svs.gsfc.nasa.gov/13326/'],['NASA black-hole visualisation context','https://science.nasa.gov/universe/black-holes/supermassive-black-holes/new-nasa-black-hole-visualization-takes-viewers-beyond-the-brink/']] },
   { id:'neutronStar', family:'macro', title:'Neutron star', subtitle:'Magnetised compact remnant', status:'confirmed', statusLabel:'OBSERVED COMPACT OBJECT', description:'Procedural representation of a rotating magnetised neutron star with polar emission cones. NASA supplies a data-derived 3D Crab Nebula resource powered by a pulsar.', formula:'M ≈ 1–2 M☉;  R ≈ 10–14 km;  B_p ∝ μ/R³', applicability:'Explanatory pulsar/magnetosphere view, not a numerical general-relativistic MHD solution.', visual:'macro', macroKind:'neutronStar', interaction:'field', parameters:[{key:'spinFrequency',label:'Spin frequency',unit:'Hz',min:.1,max:716,step:.1,value:30},{key:'magneticField',label:'Surface field',unit:'10¹² G',min:.01,max:1000,step:.01,value:1}], sources:[['NASA Crab Nebula 3D resource','https://science.nasa.gov/3d-resources/crab-nebula/'],['NASA NICER neutron-star science','https://science.nasa.gov/mission/nicer/']] }
 );
 
@@ -1005,11 +1224,11 @@ Object.assign(russianExoticCatalog, {
 modelRegistry.push({
   id: "complexSpinQuasiparticle",
   family: "hypothetical",
-  title: "4D complex-spin quasiparticle",
-  subtitle: "PT-symmetric effective non-Hermitian projection",
+  title: "M-particle",
+  subtitle: "4D quasiparticle with complex spin · PT-symmetric effective projection",
   status: "hypothetical",
   statusLabel: "PROJECT HYPOTHESIS",
-  description: "A hypothetical 4D quasiparticle rendered as its changing 3D slice. The real effective-spin response is drawn as precession; the imaginary response controls gain/loss-like breathing and phase displacement. It is not a claimed elementary particle or a prediction of a new physical state.",
+  description: "M-particle is the project's hypothetical 4D quasiparticle with complex spin, rendered as a changing 3D slice or as a bounded M-field. Its effective response is used only for educational probe demonstrations; it is not a claimed elementary particle, a new interaction, or a prediction of a physical state.",
   formula: "r₃ = √(R₄² − h²);  H_eff = Ω σ_z + iΓ σ_x + κh σ_y",
   applicability: "Non-Hermitian and PT-symmetric effective Hamiltonians are established tools for open systems. The interpretation as a 4D particle and the geometry shown here are an author-defined, educational hypothesis.",
   visual: "complexSpin",
@@ -1021,7 +1240,9 @@ modelRegistry.push({
     { key: "iCoupling", label: "i-coupling strength", min: 0, max: 1, step: .01, value: .72 },
     { key: "leakage", label: "Leakage Im(s)", min: 0, max: 1, step: .01, value: .18 },
     { key: "projectionCoherence", label: "Projection coherence", min: 0, max: 1, step: .01, value: .84 },
-    { key: "probeType", label: "3D probe", type: "select", value: "photon", options: [["photon", "Photon — refraction / phase shift"], ["electron", "Electron — deflection"], ["neutrino", "Neutrino — phase delay"], ["atom", "Atom — energy-level shift"]] },
+    { key: "probeType", label: "3D probe", type: "select", value: "photon", options: [["photon", "Photon — refraction / phase shift"], ["electron", "Electron — deflection"], ["neutrino", "Neutrino — phase delay"], ["protonPair", "Proton pair — effective repulsion"], ["microBlackHole", "Microscopic black hole — effective trajectory"], ["atom", "Atom — energy-level shift"]] },
+    { key: "probeAxis", label: "M-spin target axis", type: "select", value: "i", options: [["i", "i — reference phase"], ["x", "x — transverse response"], ["y", "y — lateral response"], ["z", "z — longitudinal response"]] },
+    { key: "fieldTension", label: "M-field tension", min: 0, max: 1, step: .01, value: .58 },
     { key: "projection", label: "Visible 3D axes", type: "select", value: "xyi", options: [["xyz", "X · Y · Z (hide i)"], ["xyi", "X · Y · i (hide z)"], ["xzi", "X · Z · i (hide y)"], ["yzi", "Y · Z · i (hide x)"]] },
     { key: "positionX", label: "4D position x", min: -3, max: 3, step: .01, value: 0 },
     { key: "positionY", label: "4D position y", min: -3, max: 3, step: .01, value: 0 },
@@ -1050,22 +1271,23 @@ russianExoticCatalog.complexSpinQuasiparticle = [
 modelRegistry.push({
   id: "gravitationalStandingWaveCore",
   family: "hypothetical",
-  title: "Gravitational standing-wave core",
-  subtitle: "Hypothetical synchronized compact-object resonator",
+  title: "Gravitational standing-wave torus",
+  subtitle: "Hypothetical opaque toroidal gravitational-wave resonator",
   status: "hypothetical",
   statusLabel: "AUTHOR HYPOTHESIS",
-  description: "A speculative educational model of 6–16 compact horizons arranged in synchronized coplanar orbits. Their idealised tensor-wave contributions form a controlled standing-wave pattern with fixed nodes, antinodes and translucent wavefronts in a deformable spacetime grid.",
+  description: "A speculative educational model shown as one large opaque toroidal body. Choose either a standing-wave surface mode or a travelling mode with a deliberately localised, high-amplitude central peak; the interior is intentionally not assigned a particle or horizon structure.",
   formula: "h_ij(r,t) = A sin(k r) cos(ωt + φ) e_ij;  r_s = 2GM/c²",
   applicability: "Standing gravitational-wave modes and compact-binary waveforms are established subjects, but no stable multi-black-hole resonator of this type is known. This interactive scene is an author-defined visual hypothesis, not numerical relativity or a prediction.",
   visual: "standingWaveCore",
   interaction: "gravity",
   parameters: [
-    { key: "coreCount", label: "Compact-horizon nodes", type: "select", value: "8", options: [["6", "6 nodes"], ["8", "8 nodes"], ["12", "12 nodes"], ["16", "16 nodes"]] },
-    { key: "coreOrbitRadius", label: "Orbital radius", min: 3.8, max: 8.8, step: 0.1, value: 5.8, unit: "r_g (visual)" },
-    { key: "coreOrbitRate", label: "Orbital rate", min: 0.05, max: 1.2, step: 0.01, value: 0.32, unit: "rad/s" },
+    { key: "torusMajorRadius", label: "Torus major radius", min: 3.2, max: 7.5, step: 0.1, value: 5.25, unit: "visual" },
+    { key: "torusTubeRadius", label: "Torus tube radius", min: 0.7, max: 2.7, step: 0.05, value: 1.5, unit: "visual" },
+    { key: "torusHeight", label: "Torus vertical height", min: 0.35, max: 2.4, step: 0.05, value: 1.15, unit: "×" },
+    { key: "wavePattern", label: "Wave pattern", type: "select", value: "standing", options: [["standing", "Standing wave"], ["centralPeak", "Travelling wave — central peak"]] },
     { key: "waveAmplitude", label: "Wave amplitude", min: 0, max: 1, step: 0.01, value: 0.62, unit: "visual" },
-    { key: "waveFrequency", label: "Standing-wave frequency", min: 0.1, max: 2.5, step: 0.01, value: 0.72, unit: "Hz (visual)" },
-    { key: "nodeDensity", label: "Radial node density", min: 1, max: 8, step: 1, value: 3, unit: "" },
+    { key: "waveFrequency", label: "Wave frequency", min: 0.1, max: 2.5, step: 0.01, value: 0.72, unit: "Hz (visual)" },
+    { key: "waveModeCount", label: "Toroidal wave mode", min: 1, max: 12, step: 1, value: 4, unit: "" },
     { key: "resonanceStability", label: "Phase synchronisation", min: 0, max: 1, step: 0.01, value: 0.84, unit: "" },
     { key: "polarization", label: "Wave polarisation", type: "select", value: "plus", options: [["plus", "+ polarisation"], ["cross", "× polarisation"], ["elliptical", "elliptical"]] },
     { key: "gridOpacity", label: "Spacetime grid visibility", min: 0, max: 1, step: 0.01, value: 0.52, unit: "" },
@@ -1085,6 +1307,66 @@ russianExoticCatalog.gravitationalStandingWaveCore = [
   "Спекулятивная учебная модель из 6–16 компактных горизонтов на синхронизированных копланарных орбитах. Их идеализированные тензорные волны образуют управляемую стоячую структуру с узлами, пучностями и полупрозрачными фронтами в деформируемой сетке пространства-времени.",
   "Стоячие гравитационные волны и волны от компактных двойных систем изучаются в физике, но устойчивый резонатор из множества чёрных дыр такого вида неизвестен. Это авторская учебная гипотеза, а не численная ОТО и не предсказание.",
   "АВТОРСКАЯ ГИПОТЕЗА"
+];
+
+// Author-defined three-body demonstration.  This entry deliberately lives in
+// the hypotheses catalogue rather than among observed macro-objects: a
+// long-lived merger-preventing triple requires numerical relativity and is not
+// an established physical configuration.
+modelRegistry.push({
+  id: "resonantTripleBlackHole",
+  family: "hypothetical",
+  title: "Periodic six-black-hole balancing field (hypothesis)",
+  subtitle: "Project hypothesis · symmetric coplanar balancing pair",
+  status: "hypothetical",
+  statusLabel: "PROJECT HYPOTHESIS",
+  description: "The central black-hole pair is evolved from its instantaneous positions and velocities with a softened force model plus a small 1PN-inspired correction and continuous radiation-reaction proxy. Four equal-mass external balancing bodies are present from the initial state and follow smooth, coplanar controller trajectories. Their gravitational tidal field can change the binary trajectory without directly placing or stopping either central horizon.",
+  formula: "d²rᵢ/dt² = −G Σⱼ≠ᵢ mⱼ(rᵢ−rⱼ)/|rᵢ−rⱼ|³;  hᵢⱼ ∝ (2G/c⁴D) d²Qᵢⱼ/dt²",
+  applicability: "Long-lived multi-black-hole evolution with radiation reaction requires numerical relativity and is generally chaotic. This is an internally consistent educational force model: only the outer quartet is controlled, while the central pair responds to calculated forces. It is not numerical-relativity output, evidence for a stable astrophysical solution, or a prediction.",
+  visual: "resonantTriple",
+  interaction: "gravity",
+  parameters: [
+    { key: "centralMassA", label: "Central mass A", unit: "M☉", min: 5, max: 60, step: .5, value: 30 },
+    { key: "centralMassB", label: "Central mass B", unit: "M☉", min: 5, max: 60, step: .5, value: 28 },
+    { key: "tertiaryMass", label: "Balancing-body mass (each)", unit: "M☉", min: 2, max: 20, step: .5, value: 7 },
+    { key: "centralSeparation", label: "Central-pair scale", unit: "r_g (visual)", min: 10, max: 34, step: .5, value: 22 },
+    { key: "outerTrajectory", label: "Outer trajectory", type: "select", value: "rosette", options: [["rosette", "Rosette precession"], ["libration", "Co-orbital libration"], ["horseshoe", "Horseshoe-like passage"]] },
+    { key: "outerModulation", label: "Trajectory modulation", min: 0, max: 1, step: .01, value: .68 },
+    { key: "curvatureDepth", label: "Embedding depth", min: .5, max: 3.5, step: .01, value: 2.2 },
+    { key: "gridOpacity", label: "Spacetime-grid visibility", min: .03, max: .65, step: .01, value: .24 },
+    { key: "waveOpacity", label: "Wavefront visibility", min: 0, max: 1, step: .01, value: .82 }
+  ],
+  sources: [
+    ["Einstein Toolkit — open numerical-relativity infrastructure", "https://einsteintoolkit.org/"],
+    ["Blanchet, Gravitational Radiation from Post-Newtonian Sources", "https://arxiv.org/abs/1310.1528"],
+    ["Three-body dynamics in numerical relativity — review context", "https://arxiv.org/abs/1307.6237"]
+  ]
+});
+const resonantTripleModel = modelRegistry.find((model) => model.id === "resonantTripleBlackHole");
+catalogOriginal.set(resonantTripleModel.id, { title: resonantTripleModel.title, subtitle: resonantTripleModel.subtitle, description: resonantTripleModel.description, applicability: resonantTripleModel.applicability, statusLabel: resonantTripleModel.statusLabel });
+russianExoticCatalog.resonantTripleBlackHole = [
+  "Управляемый пролёт четырёх чёрных дыр (гипотеза)",
+  "Авторская гипотеза · симметричная копланарная балансирующая пара",
+  "Две центральные чёрные дыры начинают с той же барицентрической квазикеплеровской спирали и качественного квадрупольного волнового рисунка, что и в лаборатории двойного слияния. Симметричная пара равномассивных внешних чёрных дыр добавляется на заданной копланарной траектории; её приливный импульс, зависящий от расстояния и фазы, иллюстрирует, как близкий многотельный пролёт может перевести центральную пару в разлёт.",
+  "Для четырёх чёрных дыр с излучением требуется численная ОТО, а динамика обычно хаотична. Здесь используется управляемый симметричный пролёт: это учебная гипотеза, а не доказательство устойчивой конфигурации, предотвращающей слияние."
+];
+
+// Keep this late override separate from the legacy catalogue text so all three
+// user-facing fields describe the ready-to-run balancing quartet.
+russianExoticCatalog.resonantTripleBlackHole = [
+  "Периодическая балансирующая система шести чёрных дыр (гипотеза)",
+  "Авторская гипотеза · автоматическая копланарная четвёрка",
+  "Две центральные чёрные дыры эволюционируют из текущих положений и скоростей под действием рассчитанных сил, слабой 1PN-подобной поправки и непрерывной модели радиационной реакции. Четыре внешних балансировщика присутствуют с начала опыта и меняют только собственные гладкие копланарные траектории; их приливное поле может изменить путь центральной пары, не перемещая и не останавливая её напрямую.",
+  "Длительная многотельная эволюция чёрных дыр с излучением требует численной ОТО и обычно хаотична. Это внутренне согласованная учебная силовая модель: управляется только внешняя четвёрка, а центральная пара отвечает на вычисленные силы. Она не является результатом численной ОТО, доказательством устойчивой системы или предсказанием."
+];
+
+// Keep the late Russian override aligned with the current torus implementation.
+russianExoticCatalog.gravitationalStandingWaveCore = [
+  'Гравитационный тор стоячих волн',
+  'Гипотетический непрозрачный тороидальный резонатор',
+  'Один большой сплошной тор. Можно выбрать стоячую волну на его поверхности либо бегущую волну с намеренно локализованным высоким пиком в центре; внутренняя структура намеренно не показана.',
+  'Это авторская учебная гипотеза и визуальная демонстрация, а не решение уравнений Эйнштейна и не предсказание устойчивого объекта.',
+  'АВТОРСКАЯ ГИПОТЕЗА'
 ];
 
 // Geometric catalogue entry. The coordinates are rendered natively in the lab;
@@ -1127,7 +1409,62 @@ russianExoticCatalog.tesseract4d = [
   "МАТЕМАТИЧЕСКИЙ ОБЪЕКТ"
 ];
 
+modelRegistry.push({
+  id: "quantumChemistryLab",
+  family: "chemistry",
+  title: "Квантовая химия · молекулярная структура",
+  subtitle: "RDKit 3D-конформер + PySCF HF/DFT",
+  status: "computational",
+  statusLabel: "НАУЧНЫЙ РАСЧЁТ",
+  description: "RDKit строит детерминированный трёхмерный конформер и оптимизирует его классическим силовым полем MMFF94. Затем PySCF независимо рассчитывает электронную структуру методом Hartree–Fock или DFT.",
+  formula: "H_e Ψ = E Ψ;  E_DFT[ρ] = T_s[ρ] + V_ext[ρ] + J[ρ] + E_xc[ρ]",
+  applicability: "Это настоящий локальный расчёт изолированной молекулы в приближении Борна–Оппенгеймера. Точность зависит от геометрии, базиса и функционала; MMFF-геометрия не заменяет квантовую оптимизацию геометрии.",
+  visual: "molecule",
+  interaction: "quantumChemistry",
+  parameters: [
+    { key: "moleculePreset", label: "Молекула", type: "select", value: "water", options: [["water", "Вода · H₂O"], ["ammonia", "Аммиак · NH₃"], ["methane", "Метан · CH₄"], ["ethanol", "Этанол · C₂H₆O"], ["benzene", "Бензол · C₆H₆"], ["caffeine", "Кофеин · C₈H₁₀N₄O₂"]] },
+    { key: "quantumMethod", label: "Электронный метод", type: "select", value: "RHF", options: [["RHF", "RHF · Hartree–Fock"], ["PBE", "DFT · PBE"], ["B3LYP", "DFT · B3LYP"]] },
+    { key: "basisSet", label: "Базис", type: "select", value: "sto-3g", options: [["sto-3g", "STO-3G · быстрый"], ["6-31g", "6-31G"], ["def2-svp", "def2-SVP · точнее"]] }
+  ],
+  sources: [["PySCF open-source quantum chemistry", "https://pyscf.org/"], ["RDKit open-source cheminformatics", "https://www.rdkit.org/"], ["ASE Atomic Simulation Environment", "https://ase-lib.org/"]]
+});
+
+modelRegistry.push({
+  id: "semiconductorDeviceLab",
+  family: "semiconductor",
+  title: "Полупроводниковый прибор · p–n-переход",
+  subtitle: "DEVSIM finite-volume TCAD",
+  status: "computational",
+  statusLabel: "НАУЧНЫЙ TCAD-РАСЧЁТ",
+  description: "DEVSIM строит одномерную сетку кремниевого p–n-перехода и решает нелинейное уравнение Пуассона–Больцмана с контактными условиями Ферми. График показывает самосогласованные потенциал и электрическое поле.",
+  formula: "∇·(ε∇φ) = −q(p − n + N_D − N_A);  n p = n_i²",
+  applicability: "Реальный конечнo-объёмный равновесный TCAD-расчёт. Текущая версия одномерна и использует постоянные параметры кремния; она ещё не является переходным или полным drift–diffusion I–V расчётом.",
+  visual: "semiconductor",
+  interaction: "semiconductor",
+  parameters: [
+    { key: "deviceTopology", label: "Структура прибора", type: "select", value: "pn", options: [["pn", "p–n переход"], ["pin", "p–i–n структура"], ["npn", "n–p–n профиль"]] },
+    { key: "deviceLengthUm", label: "Длина прибора", unit: "µm", min: .2, max: 10, step: .1, value: 2 },
+    { key: "acceptorDoping", label: "Акцепторное легирование Nₐ", unit: "cm⁻³", min: 1e14, max: 1e18, step: 1e14, value: 1e16 },
+    { key: "donorDoping", label: "Донорное легирование Nᴅ", unit: "cm⁻³", min: 1e14, max: 1e18, step: 1e14, value: 1e16 },
+    { key: "appliedBias", label: "Смещение анода", unit: "V", min: -2, max: 1, step: .02, value: 0 },
+    { key: "deviceTemperature", label: "Температура", unit: "K", min: 100, max: 500, step: 5, value: 300 },
+    { key: "meshNodes", label: "Узлы сетки", min: 41, max: 401, step: 20, value: 121 }
+  ],
+  sources: [["DEVSIM open-source TCAD", "https://github.com/devsim/devsim"], ["DEVSIM diode example", "https://devsim.net/examples_diode.html"]]
+});
+
+for (const id of ["quantumChemistryLab", "semiconductorDeviceLab"]) {
+  const model = modelRegistry.find((item) => item.id === id);
+  catalogOriginal.set(id, { title: model.title, subtitle: model.subtitle, description: model.description, applicability: model.applicability, statusLabel: model.statusLabel });
+}
+hebrewTitles.quantumChemistryLab = "כימיה קוונטית · מבנה מולקולרי";
+hebrewTitles.semiconductorDeviceLab = "התקן מוליך למחצה · צומת p–n";
+hebrewFamilyTitles.chemistry = "כימיה קוונטית";
+hebrewFamilyTitles.semiconductor = "מוליכים למחצה";
+
 export const families = [
+  ["chemistry", "Квантовая химия"],
+  ["semiconductor", "Полупроводники"],
   ["exotic", "Exotic matter"],
   ["all", "Все"],
   ["ordinary", "Обычная"],

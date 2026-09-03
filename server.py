@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import math
 import random
@@ -11,8 +10,118 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+from scientific_backend.pycbc_adapter import solve as solve_pycbc_waveform
+from scientific_backend.pycbc_adapter import status as pycbc_status
+from scientific_backend.pythia_adapter import solve as solve_pythia_event
+from scientific_backend.pythia_adapter import status as pythia_status
+from scientific_backend.geant4_adapter import solve as solve_geant4_transport
+from scientific_backend.geant4_adapter import status as geant4_status
+from scientific_backend.nusquids_adapter import solve as solve_nusquids
+from scientific_backend.nusquids_adapter import status as nusquids_status
+from scientific_backend.einstein_toolkit_adapter import solve as solve_einstein_toolkit_waveform
+from scientific_backend.einstein_toolkit_adapter import status as einstein_toolkit_status
+from scientific_backend.hardware_adapter import status as hardware_status
+from scientific_backend.directml_adapter import solve as solve_directml
+from scientific_backend.directml_adapter import status as directml_status
+from scientific_backend.gpu_waveform_adapter import solve as solve_gpu_waveform
+from scientific_backend.gpu_waveform_adapter import status as gpu_waveform_status
+from scientific_backend.gpu_wave_solver import solve as solve_gpu_wave_grid
+from scientific_backend.gpu_wave_solver import status as gpu_wave_grid_status
+from scientific_backend.gpu_wave_solver_3d import solve as solve_gpu_wave_grid_3d
+from scientific_backend.gpu_wave_solver_3d import status as gpu_wave_grid_3d_status
+from scientific_backend.gpu_neutrino_batch import solve as solve_gpu_neutrino_batch
+from scientific_backend.gpu_neutrino_batch import status as gpu_neutrino_batch_status
+from scientific_backend.gpu_quantum_simulator import solve as solve_gpu_quantum_simulator
+from scientific_backend.gpu_quantum_simulator import status as gpu_quantum_simulator_status
+from scientific_backend.acceleration_registry import status as acceleration_status
+from scientific_backend.chemistry_adapter import solve as solve_quantum_chemistry
+from scientific_backend.chemistry_adapter import status as chemistry_status
+from scientific_backend.devsim_adapter import solve as solve_semiconductor_tcad
+from scientific_backend.devsim_adapter import status as devsim_status
+from scientific_backend.multiquark_discovery import solve as solve_multiquark_discovery
+from scientific_backend.multiquark_discovery import status as multiquark_discovery_status
+
+
+try:
+    from scientific_backend import (
+        capabilities as scientific_capabilities,
+        solve_binary_black_hole as scientific_black_hole_merger,
+        solve_cornell_potential as scientific_cornell_potential,
+        solve_einsteinpy_geodesic as scientific_einsteinpy_geodesic,
+    )
+    from scientific_backend.compose_adapter import solve as solve_compose_eos
+    from scientific_backend.compose_adapter import status as compose_status
+
+    SCIENTIFIC_IMPORT_ERROR: str | None = None
+except Exception as exc:  # Keep the zero-dependency server as a safe fallback.
+    scientific_capabilities = None
+    scientific_black_hole_merger = None
+    scientific_cornell_potential = None
+    scientific_einsteinpy_geodesic = None
+    solve_compose_eos = None
+    compose_status = None
+    SCIENTIFIC_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
+
 
 ROOT = Path(__file__).resolve().parent
+
+
+def science_status() -> dict[str, Any]:
+    if scientific_capabilities is None:
+        return {
+            "available": False,
+            "engine": "python-standard-library-fallback",
+            "error": SCIENTIFIC_IMPORT_ERROR or "scientific backend was not imported",
+        }
+    try:
+        status = scientific_capabilities()
+        status["pycbcWsl"] = pycbc_status()
+        status["compose"] = compose_status() if compose_status else {"available": False}
+        status["pythiaWsl"] = pythia_status()
+        status["geant4Wsl"] = geant4_status()
+        status["nusquidsWsl"] = nusquids_status()
+        status["einsteinToolkitData"] = einstein_toolkit_status()
+        status["hardware"] = hardware_status()
+        status["directml"] = directml_status()
+        if status["directml"].get("available") and "DmlExecutionProvider" in status["directml"].get("providers", []):
+            # Provider availability is the authoritative compute capability signal.
+            # WMI adapter enumeration can fail in a long-running watchdog process
+            # even though DirectML kernels are executing and profile-confirmed.
+            status["hardware"]["scientificCompute"] = "directml-gpu"
+            status["hardware"]["directmlVerified"] = True
+        status["gpuWaveform"] = gpu_waveform_status()
+        status["gpuWaveGrid"] = gpu_wave_grid_status()
+        status["gpuWaveGrid3d"] = gpu_wave_grid_3d_status()
+        status["gpuNeutrinoBatch"] = gpu_neutrino_batch_status()
+        status["gpuQuantumSimulator"] = gpu_quantum_simulator_status()
+        status["acceleration"] = acceleration_status()
+        status["chemistry"] = chemistry_status()
+        status["devsim"] = devsim_status()
+        status["multiquarkDiscovery"] = multiquark_discovery_status()
+        return status
+    except Exception as exc:
+        return {"available": False, "engine": "python-standard-library-fallback", "error": f"{type(exc).__name__}: {exc}"}
+
+
+def with_science_fallback(factory: Any, fallback: Any, values: dict[str, Any]) -> dict[str, Any]:
+    if factory is None:
+        result = fallback(values)
+        result["provenance"] = {
+            "engine": "python-standard-library-fallback",
+            "scientificBackendError": SCIENTIFIC_IMPORT_ERROR,
+            "validatedExternalSimulation": False,
+        }
+        return result
+    try:
+        return factory(values)
+    except Exception as exc:
+        result = fallback(values)
+        result["provenance"] = {
+            "engine": "python-standard-library-fallback",
+            "scientificBackendError": f"{type(exc).__name__}: {exc}",
+            "validatedExternalSimulation": False,
+        }
+        return result
 
 
 def solve_neutrino_lens(values: dict[str, float], points: int = 120) -> dict[str, Any]:
@@ -476,23 +585,83 @@ def solve_black_hole_merger(values: dict[str, Any], points: int = 180) -> dict[s
 
 
 def solve(model: str, values: dict[str, Any]) -> dict[str, Any]:
+    if model == "quantumChemistryLab":
+        return solve_quantum_chemistry(values)
+    if model == "semiconductorDeviceLab":
+        return solve_semiconductor_tcad(values)
+    if model == "directmlCompute":
+        return solve_directml(values)
+    if model == "gpuWaveformEnsemble":
+        return solve_gpu_waveform(values)
+    if model == "gpuWaveGrid":
+        return solve_gpu_wave_grid(values)
+    if model == "gpuWaveGrid3d":
+        return solve_gpu_wave_grid_3d(values)
+    if model == "gpuNeutrinoBatch":
+        return solve_gpu_neutrino_batch(values)
+    if model == "gpuQuantumSimulator":
+        return solve_gpu_quantum_simulator(values)
+    if model == "geant4Transport":
+        return solve_geant4_transport(values)
+    if model == "proton" and str(values.get("calculationMode", "cornell")) == "geant4":
+        transport_values = {**values, "transportParticle": "gamma", "transportMaterial": "G4_Si"}
+        return solve_geant4_transport(transport_values)
     if model == "neutrinoLens":
+        if str(values.get("neutrinoCalculationMode", "nusquids")) == "nusquids":
+            return solve_nusquids(values)
         return solve_neutrino_lens(values)
     if model == "blackHole":
-        return solve_black_hole_merger(values)
+        if str(values.get("waveformSource", "pycbc")) == "einsteinToolkit":
+            result = solve_einstein_toolkit_waveform(values)
+            if scientific_einsteinpy_geodesic is not None:
+                result["geodesic"] = scientific_einsteinpy_geodesic(values)
+            return result
+        pycbc_error = None
+        if str(values.get("binaryCount", "2")) == "2" and pycbc_status().get("available"):
+            try:
+                result = solve_pycbc_waveform(values)
+            except Exception as exc:
+                pycbc_error = f"{type(exc).__name__}: {exc}"
+                result = with_science_fallback(scientific_black_hole_merger, solve_black_hole_merger, values)
+        else:
+            result = with_science_fallback(scientific_black_hole_merger, solve_black_hole_merger, values)
+        if pycbc_error:
+            result.setdefault("provenance", {})["pycbcFallbackError"] = pycbc_error
+        if scientific_einsteinpy_geodesic is not None:
+            try:
+                result["geodesic"] = scientific_einsteinpy_geodesic(values)
+            except Exception as exc:
+                result["geodesic"] = {"available": False, "error": f"{type(exc).__name__}: {exc}"}
+        return result
     if model in {"hydrogen", "helium4"}:
         return solve_atomic_photon(values, helium=model == "helium4")
-    if model in {"hDibaryon", "omegaOmega"}:
+    if model == "multiQuarkDiscovery":
+        return solve_multiquark_discovery(values)
+    if model in {"multiQuarkWorkbench", "hDibaryon", "omegaOmega"}:
         return solve_dibaryon(values, omega=model == "omegaOmega")
     if model in {"strangelet", "cflStrangelet"}:
         return solve_strangelet(values)
     if model in {"pionPlus", "kaonPlus", "rhoZero", "jPsi", "upsilon1S", "x3872", "scalarGlueball", "hybridMeson"}:
         return solve_string_breaking(values, model)
     if model in {"colliderWorkbench", "ppMinimumBias", "ppDijet", "ppHiggsGammaGamma", "ppZPrime", "ppHiddenValley"}:
+        if model in {"colliderWorkbench", "ppMinimumBias", "ppDijet"} and pythia_status().get("available"):
+            try:
+                return solve_pythia_event(model, values)
+            except Exception as exc:
+                result = solve_collision(values, model)
+                result["provenance"] = {"engine": "python-local-solver-fallback", "pythiaFallbackError": f"{type(exc).__name__}: {exc}", "validatedExternalSimulation": False}
+                return result
         return solve_collision(values, model)
     if model in {"mitBag", "njl", "twoSC", "cfl", "qgp", "neutronMatter", "hyperonMatter", "kaonCondensate", "quarkyonic", "qhc21", "loff", "gCFL", "cflKaon"}:
+        if model == "neutronMatter" and solve_compose_eos is not None:
+            try:
+                return solve_compose_eos(values)
+            except Exception as exc:
+                result = solve_eos(model, values)
+                result["provenance"] = {"engine": "python-standard-library-fallback", "composeFallbackError": f"{type(exc).__name__}: {exc}", "validatedExternalSimulation": False}
+                return result
         return solve_eos(model, values)
-    return solve_confinement(values)
+    return with_science_fallback(scientific_cornell_potential, solve_confinement, values)
 
 
 class LabHandler(SimpleHTTPRequestHandler):
@@ -516,37 +685,55 @@ class LabHandler(SimpleHTTPRequestHandler):
             self.send_header("Location", f"/matter-lab/{query}")
             self.end_headers()
             return
-        if self.path.split("?", 1)[0] == "/api/status":
+        request_path = self.path.split("?", 1)[0]
+        if request_path in {"/api/status", "/matter-lab/api/status"}:
+            science = science_status()
             self.send_json({
                 "ok": True,
-                "engine": "local-cpu",
+                "engine": science.get("acceleration", {}).get("engine", science["engine"]) if science.get("available") else "local-cpu-fallback",
+                "scientific": science,
                 "adapters": {
+                    "numpy_scipy": "active" if science.get("available") else "fallback",
+                    "directml": "active" if science.get("directml", {}).get("available") else "optional-not-installed",
+                    "gpu_waveform_ensemble": "active" if science.get("gpuWaveform", {}).get("available") else "optional-not-installed",
+                    "gpu_wave_grid": "active" if science.get("gpuWaveGrid", {}).get("available") else "optional-not-installed",
+                    "gpu_wave_grid_3d": "active" if science.get("gpuWaveGrid3d", {}).get("available") else "optional-not-installed",
+                    "gpu_neutrino_batch": "active" if science.get("gpuNeutrinoBatch", {}).get("available") else "optional-not-installed",
+                    "gpu_quantum_statevector": "active" if science.get("gpuQuantumSimulator", {}).get("available") else "optional-not-installed",
                     "muses": "contract-ready",
-                    "compose": "table-loader-ready",
-                    "nusquids": "contract-ready",
-                    "geant4": "contract-ready",
-                    "einsteinpy": "available" if importlib.util.find_spec("einsteinpy") else "optional-not-installed",
-                    "einstein_toolkit": "external-waveform-import-ready",
+                    "compose": "active" if science.get("compose", {}).get("available") else "table-loader-ready",
+                    "nusquids": "active" if science.get("nusquidsWsl", {}).get("available") else "optional-not-installed",
+                    "geant4": "active" if science.get("geant4Wsl", {}).get("available") else "optional-not-installed",
+                    "einsteinpy": "active" if science.get("einsteinpy") else "optional-not-installed",
+                    "pycbc_lalsuite": "active" if science.get("pycbcWsl", {}).get("available") else "optional-not-installed",
+                    "pythia8_hepmc3": "active" if science.get("pythiaWsl", {}).get("available") else "optional-not-installed",
+                    "einstein_toolkit": "reference-data-active" if science.get("einsteinToolkitData", {}).get("available") else "external-waveform-import-ready",
+                    "rdkit_pyscf": "active" if science.get("chemistry", {}).get("available") else "optional-not-installed",
+                    "devsim": "active" if science.get("devsim", {}).get("available") else "optional-not-installed",
+                    "multiquark_discovery": "active" if science.get("multiquarkDiscovery", {}).get("available") else "unavailable",
+                    "multiquark_directml": "active" if science.get("multiquarkDiscovery", {}).get("gpuThresholdKernel", {}).get("available") else "optional-not-installed",
                 },
             })
             return
         super().do_GET()
 
     def do_POST(self) -> None:
-        if self.path.split("?", 1)[0] != "/api/solve":
+        request_path = self.path.split("?", 1)[0]
+        if request_path not in {"/api/solve", "/matter-lab/api/solve", "/api/multiquark/search", "/matter-lab/api/multiquark/search"}:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(length) or b"{}")
-            model = str(payload.get("model", "proton"))
+            model = "multiQuarkDiscovery" if request_path.endswith("/multiquark/search") else str(payload.get("model", "proton"))
             values = payload.get("values", {})
             if not isinstance(values, dict):
                 raise ValueError("values must be an object")
             started = time.perf_counter()
             result = solve(model, values)
             elapsed_ms = (time.perf_counter() - started) * 1000.0
-            self.send_json({"ok": True, "engine": "python-local-solver", "elapsed_ms": elapsed_ms, "result": result})
+            engine = result.get("provenance", {}).get("engine", "python-local-solver")
+            self.send_json({"ok": True, "engine": engine, "elapsed_ms": elapsed_ms, "result": result})
         except (ValueError, TypeError, json.JSONDecodeError) as exc:
             self.send_json({"ok": False, "error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
 

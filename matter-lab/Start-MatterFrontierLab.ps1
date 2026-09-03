@@ -18,6 +18,8 @@ function Write-WatchdogLog([string]$Message) {
 
 function Get-WorkingPython {
     $candidates = @()
+    $sciencePython = Join-Path $projectRoot '.venv-science\Scripts\python.exe'
+    if (Test-Path -LiteralPath $sciencePython) { $candidates += $sciencePython }
     # Prefer the full interpreter instead of the Windows launcher.  The latter
     # can return exit code 2 at sign-in when its default Python version has not
     # been initialised yet.

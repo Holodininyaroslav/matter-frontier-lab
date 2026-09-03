@@ -1,4 +1,7 @@
 __pycache__/
+.venv-science/
+.pytest_cache/
+scientific_output/
 *.py[cod]
 *.log
 .DS_Store

@@ -1,0 +1,10 @@
+# Reproducible baseline for the local scientific CPU backend.
+# Heavy external systems (LALSuite, PYTHIA, Geant4, Einstein Toolkit) are
+# deliberately installed through separate adapters rather than this file.
+numpy==2.5.2
+scipy==1.18.1
+pytest==9.1.1
+einsteinpy==0.4.0
+onnx==1.22.0
+onnxruntime-directml==1.24.4
+rdkit==2026.3.5

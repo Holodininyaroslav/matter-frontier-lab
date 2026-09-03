@@ -1,0 +1,5 @@
+# Isolated WSL environment used by the chemistry and semiconductor adapters.
+# Python 3.8 on the current Ubuntu image selects the newest compatible DEVSIM.
+pyscf==2.14.0
+ase==3.23.0
+devsim==2.9.1

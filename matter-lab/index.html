@@ -16,7 +16,7 @@
     }
   </script>
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
-  <link rel="stylesheet" href="./styles.css?v=20260723-macro-fix">
+  <link rel="stylesheet" href="./styles.css?v=20260903-cloud-grover">
 </head>
 <body>
   <div class="app-shell">
@@ -36,7 +36,7 @@
         <div class="solver-strip" aria-label="Состояние вычислений">
           <span id="renderStatus"><i data-lucide="box"></i> WebGL2</span>
           <span id="solverStatus"><i data-lucide="cpu"></i> browser solver</span>
-          <span id="backendStatus" class="offline"><i data-lucide="server"></i> backend: checking</span>
+          <button id="backendStatus" class="compute-status offline" type="button" title="Открыть центр научных вычислений"><i data-lucide="server"></i> backend: checking</button>
         </div>
       </div>
       <div class="top-actions">
@@ -185,7 +185,63 @@
     </div>
   </div>
 
-<script type="module" src="./app.js?v=20260724-phase-demos"></script>
-<script src="./language.js?v=20260724-phase-demos"></script>
+  <div id="computeModal" class="compute-modal" role="dialog" aria-modal="true" aria-labelledby="computeModalTitle" hidden>
+    <div class="compute-modal-card">
+      <div class="compute-modal-head">
+        <div><span class="eyebrow">LOCAL SCIENTIFIC BACKEND</span><h2 id="computeModalTitle">Центр научных вычислений</h2><p>Фактическое состояние локальных CPU/GPU-движков. Нажмите карточку GPU-ядра, чтобы открыть его модель.</p></div>
+        <button id="computeModalClose" class="small-icon-btn" type="button" aria-label="Закрыть"><i data-lucide="x"></i></button>
+      </div>
+      <div id="computeSummary" class="compute-summary" aria-live="polite"></div>
+      <div class="compute-legend"><span><i class="compute-dot gpu"></i>DirectML GPU</span><span><i class="compute-dot cpu"></i>проверенный CPU</span><span><i class="compute-dot data"></i>данные / контракт</span></div>
+      <div id="computeEngineGrid" class="compute-engine-grid"></div>
+      <p class="compute-caveat">GPU используется только там, где результат проверяется относительно CPU-эталона. Наличие пакета не означает, что весь пакет автоматически перенесён на видеокарту.</p>
+    </div>
+  </div>
+
+  <div id="multiquarkModal" class="mq-modal" role="dialog" aria-modal="true" aria-labelledby="multiquarkModalTitle" hidden>
+    <div class="mq-modal-card">
+      <header class="mq-modal-head">
+        <div>
+          <span class="eyebrow">HYBRID MULTI-QUARK DISCOVERY COMPUTER</span>
+          <h2 id="multiquarkModalTitle">Поиск многокварковых кандидатов</h2>
+          <p>Физические фильтры, эффективный гамильтониан, пороги распада и прототип FPGA/ASIC-конвейера на SystemVerilog.</p>
+        </div>
+        <button id="multiquarkModalClose" class="small-icon-btn" type="button" aria-label="Закрыть"><i data-lucide="x"></i></button>
+      </header>
+      <div class="mq-lab-layout">
+        <aside class="mq-config-panel">
+          <label><span>Кварковый состав</span><input id="mqComposition" type="text" value="u u d d s s" spellcheck="false" maxlength="80"></label>
+          <label><span>Уровень гамильтониана</span><select id="mqHamiltonianLevel"><option value="A">A · Educational color-spin</option><option value="B">B · Effective constituent QCD</option><option value="C">C · Lattice-derived contract</option></select></label>
+          <label><span>Орбитальные моды</span><input id="mqOrbitalModes" type="range" min="1" max="4" step="1" value="2"><output id="mqOrbitalModesOut">2</output></label>
+          <label><span>Color-spin coupling</span><input id="mqCoupling" type="range" min="0" max="2" step="0.05" value="1"><output id="mqCouplingOut">1.00</output></label>
+          <label><span>Бюджет поиска</span><select id="mqSearchBudget"><option value="25000">25 000</option><option value="250000" selected>250 000</option><option value="1000000">1 000 000</option></select></label>
+          <label><span>Вычислительный контур</span><select id="mqComputeBackend"><option value="directml" selected>DirectML · локальный GPU</option><option value="cpu">CPU · эталонный режим</option></select></label>
+          <label><span>Аппаратная цель</span><select id="mqHardwareTarget"><option value="rtl-emulation">RTL emulation</option><option value="fpga-single">Single FPGA</option><option value="fpga-cluster">FPGA cluster</option><option value="asic-prototype">ASIC prototype</option></select></label>
+          <button id="mqRunBtn" class="primary-action mq-run" type="button"><i data-lucide="cpu"></i><span>Запустить расчёт</span></button>
+          <p class="mq-science-warning"><strong>Научная граница:</strong> текущий локальный solver — эффективный screening-уровень. Он не является lattice QCD и не объявляет новую частицу открытой.</p>
+        </aside>
+        <main class="mq-results-panel">
+          <div id="mqRunStatus" class="mq-run-status" aria-live="polite">Готово к расчёту</div>
+          <section>
+            <div class="mq-section-title"><div><span>ПОТОК ПОИСКА</span><h3>Редукция пространства кандидатов</h3></div><b id="mqExperimentId">—</b></div>
+            <div id="mqPipeline" class="mq-pipeline"><div class="mq-empty">Запустите расчёт, чтобы построить pipeline.</div></div>
+          </section>
+          <section>
+            <div class="mq-section-title"><div><span>SHORTLIST</span><h3>Кандидаты и пороги распада</h3></div><div id="mqQuantumNumbers" class="mq-quantum-numbers"></div></div>
+            <div class="mq-table-wrap"><table class="mq-table"><thead><tr><th>ID</th><th>Jᴾ</th><th>Цвет</th><th>Базис</th><th>E, MeV</th><th>ΔE, MeV</th><th>Классификация</th></tr></thead><tbody id="mqCandidateRows"><tr><td colspan="7">Нет рассчитанных кандидатов</td></tr></tbody></table></div>
+          </section>
+          <section class="mq-hardware-section">
+            <div class="mq-section-title"><div><span>SYSTEMVERILOG HARDWARE</span><h3>Physics workload compressor</h3></div><span id="mqRtlBadge" class="mq-rtl-badge">NOT GENERATED</span></div>
+            <div class="mq-hardware-flow"><span>Candidate stream</span><i>→</i><span>Q/B/S filter</span><i>→</i><span>Color singlet</span><i>→</i><span>Pauli gate</span><i>→</i><span>Threshold engine</span></div>
+            <div class="mq-hardware-stats" id="mqHardwareStats"></div>
+            <details class="mq-code-panel"><summary>SystemVerilog исходник</summary><div class="mq-code-actions"><button id="mqCopySvBtn" class="solver-btn" type="button">Копировать</button><button id="mqDownloadSvBtn" class="solver-btn" type="button">Скачать .sv</button></div><pre><code id="mqSystemVerilog">// После расчёта здесь появится синтезируемый модуль.</code></pre></details>
+          </section>
+        </main>
+      </div>
+    </div>
+  </div>
+
+<script type="module" src="./app.js?v=20260904-cloud-grover"></script>
+<script src="./language.js?v=20260903-directml-quantum"></script>
 </body>
 </html>
