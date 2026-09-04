@@ -4,9 +4,9 @@
   if (!config) throw new Error("INSPECTOR_CONFIG is missing");
 
   const common = {
-    en:{language:"Language",back:"← Matter Frontier Lab",architecture:"Computation architecture",architectureIntro:"Each block has a narrow, inspectable responsibility.",stages:"Open the algorithm stage by stage",stagesIntro:"Choose a stage or substage. The table loads the exact repository source and annotates every displayed line.",line:"Line",code:"Exact source",substage:"Substage",annotation:"What this line does",previous:"Previous stage",next:"Next stage",sources:"Source inventory",boundary:"Scientific boundary",loading:"Loading exact source…",blank:"Blank line separates logical blocks.",comment:"Source comment documents intent or a scientific limitation.",import:"Imports a dependency used by this computation block.",definition:"Defines a reusable function, class, or hardware module.",condition:"Selects a path only when its stated condition is true.",loop:"Repeats the operation over candidates, samples, or hardware lanes.",return:"Returns the stage result to the next pipeline boundary.",assignment:"Creates or updates a named intermediate value.",hardware:"Declares or updates a synthesizable SystemVerilog signal.",fallback:"Executable project line in the selected stage."},
-    ru:{language:"Язык",back:"← Matter Frontier Lab",architecture:"Архитектура вычислений",architectureIntro:"У каждого блока есть узкая и проверяемая ответственность.",stages:"Откройте алгоритм по этапам",stagesIntro:"Выберите этап или подэтап. Таблица загружает точный исходник репозитория и поясняет каждую показанную строку.",line:"Строка",code:"Точный исходник",substage:"Подэтап",annotation:"Что делает строка",previous:"Предыдущий этап",next:"Следующий этап",sources:"Состав исходников",boundary:"Научная граница",loading:"Загрузка точного исходника…",blank:"Пустая строка разделяет логические блоки.",comment:"Комментарий исходника фиксирует назначение или научное ограничение.",import:"Подключает зависимость, используемую этим вычислительным блоком.",definition:"Определяет переиспользуемую функцию, класс или аппаратный модуль.",condition:"Выбирает ветвь только при выполнении указанного условия.",loop:"Повторяет операцию для кандидатов, измерений или аппаратных каналов.",return:"Передаёт результат этапа на следующую границу конвейера.",assignment:"Создаёт или обновляет именованное промежуточное значение.",hardware:"Объявляет или обновляет синтезируемый сигнал SystemVerilog.",fallback:"Исполняемая строка проекта в выбранном этапе."},
-    he:{language:"שפה",back:"Matter Frontier Lab ←",architecture:"ארכיטקטורת החישוב",architectureIntro:"לכל בלוק אחריות צרה וניתנת לבדיקה.",stages:"פתיחת האלגוריתם שלב אחר שלב",stagesIntro:"בחרו שלב או תת־שלב. הטבלה טוענת את קוד המקור המדויק מהמאגר ומסבירה כל שורה מוצגת.",line:"שורה",code:"קוד מקור מדויק",substage:"תת־שלב",annotation:"מה השורה עושה",previous:"השלב הקודם",next:"השלב הבא",sources:"מפת קבצי המקור",boundary:"גבול מדעי",loading:"טוען קוד מקור מדויק…",blank:"שורה ריקה מפרידה בין בלוקים לוגיים.",comment:"הערת המקור מתעדת כוונה או מגבלה מדעית.",import:"מייבא תלות שבה משתמש בלוק החישוב.",definition:"מגדיר פונקציה, מחלקה או מודול חומרה לשימוש חוזר.",condition:"בוחר מסלול רק כאשר התנאי מתקיים.",loop:"חוזר על הפעולה עבור מועמדים, מדידות או ערוצי חומרה.",return:"מחזיר את תוצאת השלב לגבול הצינור הבא.",assignment:"יוצר או מעדכן ערך ביניים בעל שם.",hardware:"מכריז או מעדכן אות SystemVerilog הניתן לסינתזה.",fallback:"שורת פרויקט ניתנת להרצה בשלב שנבחר."}
+    en:{language:"Language",back:"← Matter Frontier Lab",flow:"Live dependency map",runtimeDependency:"Runtime data dependency",referenceDependency:"Reference / verification path",parallelLane:"Parallel-capable lane",architecture:"Computation architecture",architectureIntro:"Each block has a narrow, inspectable responsibility.",stages:"Open the algorithm stage by stage",stagesIntro:"Choose a stage or substage. The table loads the exact repository source and annotates every displayed line.",line:"Line",code:"Exact source",substage:"Substage",annotation:"What this line does",previous:"Previous stage",next:"Next stage",sources:"Source inventory",boundary:"Scientific boundary",loading:"Loading exact source…",blank:"Blank line separates logical blocks.",comment:"Source comment documents intent or a scientific limitation.",import:"Imports a dependency used by this computation block.",definition:"Defines a reusable function, class, or hardware module.",condition:"Selects a path only when its stated condition is true.",loop:"Repeats the operation over candidates, samples, or hardware lanes.",return:"Returns the stage result to the next pipeline boundary.",assignment:"Creates or updates a named intermediate value.",hardware:"Declares or updates a synthesizable SystemVerilog signal.",fallback:"Executable project line in the selected stage."},
+    ru:{language:"Язык",back:"← Matter Frontier Lab",flow:"Актуальная карта зависимостей",runtimeDependency:"Зависимость данных при запуске",referenceDependency:"Эталонная / проверочная ветвь",parallelLane:"Параллельно исполнимая ветвь",architecture:"Архитектура вычислений",architectureIntro:"У каждого блока есть узкая и проверяемая ответственность.",stages:"Откройте алгоритм по этапам",stagesIntro:"Выберите этап или подэтап. Таблица загружает точный исходник репозитория и поясняет каждую показанную строку.",line:"Строка",code:"Точный исходник",substage:"Подэтап",annotation:"Что делает строка",previous:"Предыдущий этап",next:"Следующий этап",sources:"Состав исходников",boundary:"Научная граница",loading:"Загрузка точного исходника…",blank:"Пустая строка разделяет логические блоки.",comment:"Комментарий исходника фиксирует назначение или научное ограничение.",import:"Подключает зависимость, используемую этим вычислительным блоком.",definition:"Определяет переиспользуемую функцию, класс или аппаратный модуль.",condition:"Выбирает ветвь только при выполнении указанного условия.",loop:"Повторяет операцию для кандидатов, измерений или аппаратных каналов.",return:"Передаёт результат этапа на следующую границу конвейера.",assignment:"Создаёт или обновляет именованное промежуточное значение.",hardware:"Объявляет или обновляет синтезируемый сигнал SystemVerilog.",fallback:"Исполняемая строка проекта в выбранном этапе."},
+    he:{language:"שפה",back:"Matter Frontier Lab ←",flow:"מפת תלויות עדכנית",runtimeDependency:"תלות נתונים בזמן ריצה",referenceDependency:"נתיב ייחוס / אימות",parallelLane:"נתיב הניתן להרצה במקביל",architecture:"ארכיטקטורת החישוב",architectureIntro:"לכל בלוק אחריות צרה וניתנת לבדיקה.",stages:"פתיחת האלגוריתם שלב אחר שלב",stagesIntro:"בחרו שלב או תת־שלב. הטבלה טוענת את קוד המקור המדויק מהמאגר ומסבירה כל שורה מוצגת.",line:"שורה",code:"קוד מקור מדויק",substage:"תת־שלב",annotation:"מה השורה עושה",previous:"השלב הקודם",next:"השלב הבא",sources:"מפת קבצי המקור",boundary:"גבול מדעי",loading:"טוען קוד מקור מדויק…",blank:"שורה ריקה מפרידה בין בלוקים לוגיים.",comment:"הערת המקור מתעדת כוונה או מגבלה מדעית.",import:"מייבא תלות שבה משתמש בלוק החישוב.",definition:"מגדיר פונקציה, מחלקה או מודול חומרה לשימוש חוזר.",condition:"בוחר מסלול רק כאשר התנאי מתקיים.",loop:"חוזר על הפעולה עבור מועמדים, מדידות או ערוצי חומרה.",return:"מחזיר את תוצאת השלב לגבול הצינור הבא.",assignment:"יוצר או מעדכן ערך ביניים בעל שם.",hardware:"מכריז או מעדכן אות SystemVerilog הניתן לסינתזה.",fallback:"שורת פרויקט ניתנת להרצה בשלב שנבחר."}
   };
 
   const sourceCache = new Map();
@@ -15,6 +15,7 @@
   let focusedSubstep = null;
   const localize = value => typeof value === "string" ? value : (value?.[language] || value?.en || "");
   const ui = key => common[language]?.[key] || common.en[key];
+  const numberedKicker = (index,value) => /^\d{2}\s*·/.test(String(value).trim()) ? String(value) : `${String(index+1).padStart(2,"0")} · ${value}`;
 
   function setStaticCopy(){
     const copy=config.copy[language]||config.copy.en;
@@ -36,8 +37,58 @@
     root.innerHTML=config.architecture.map((item,index)=>`<article><b>${String(index+1).padStart(2,"0")} · ${escapeHtml(localize(item.title))}</b><p>${escapeHtml(localize(item.text))}</p></article>`).join("");
   }
 
+  function renderFlowMap(){
+    const root=document.querySelector("#flowMap");
+    if(!root||!config.flow) return;
+    const flow=config.flow;
+    const lanes=(flow.lanes||[]).map(lane=>`<div class="flow-lane ${escapeHtml(lane.kind||"")}" style="grid-column:1/-1;grid-row:${Number(lane.row)}"><span>${escapeHtml(localize(lane.title))}</span></div>`).join("");
+    const nodes=(flow.nodes||[]).map((node,index)=>{
+      const stage=config.stages[node.stage];
+      const title=localize(node.title)||localize(stage?.title);
+      const kicker=localize(node.kicker)||localize(stage?.kicker)||localize(stage?.sourceLabel);
+      return `<button class="flow-node ${node.kind||"runtime"} ${node.stage===stageIndex?"active":""}" data-flow-node="${escapeHtml(node.id||String(index))}" data-flow-stage="${Number(node.stage)}" type="button" style="grid-column:${Number(node.column)};grid-row:${Number(node.row)}"><small>${escapeHtml(numberedKicker(Number(node.stage),kicker))}</small><strong>${escapeHtml(title)}</strong><span>${escapeHtml(localize(node.caption)||"")}</span></button>`;
+    }).join("");
+    root.innerHTML=`<div class="flow-canvas" style="--flow-columns:${Number(flow.columns||5)};--flow-rows:${Number(flow.rows||3)}"><svg class="flow-lines" aria-hidden="true"></svg>${lanes}${nodes}</div><p class="flow-note">${escapeHtml(localize(flow.note)||"")}</p>`;
+    root.querySelectorAll("[data-flow-stage]").forEach(button=>button.addEventListener("click",()=>{
+      openStage(Number(button.dataset.flowStage));
+      document.querySelector(".inspector")?.scrollIntoView({behavior:"smooth",block:"start"});
+    }));
+    requestAnimationFrame(drawFlowConnections);
+  }
+
+  function drawFlowConnections(){
+    const canvas=document.querySelector(".flow-canvas");
+    const svg=canvas?.querySelector(".flow-lines");
+    if(!canvas||!svg||!config.flow) return;
+    const bounds=canvas.getBoundingClientRect();
+    svg.setAttribute("viewBox",`0 0 ${Math.max(1,bounds.width)} ${Math.max(1,bounds.height)}`);
+    svg.innerHTML=`<defs><marker id="flow-arrow-runtime" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker><marker id="flow-arrow-reference" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs>`;
+    canvas.querySelectorAll(".flow-edge-label").forEach(label=>label.remove());
+    for(const edge of config.flow.edges||[]){
+      const from=canvas.querySelector(`[data-flow-node="${cssEscape(edge.from)}"]`);
+      const to=canvas.querySelector(`[data-flow-node="${cssEscape(edge.to)}"]`);
+      if(!from||!to) continue;
+      const a=from.getBoundingClientRect(), b=to.getBoundingClientRect();
+      const ac={x:a.left-bounds.left+a.width/2,y:a.top-bounds.top+a.height/2};
+      const bc={x:b.left-bounds.left+b.width/2,y:b.top-bounds.top+b.height/2};
+      const horizontal=Math.abs(bc.x-ac.x)>=Math.abs(bc.y-ac.y);
+      let x1=ac.x,y1=ac.y,x2=bc.x,y2=bc.y;
+      if(horizontal){const direction=bc.x>=ac.x?1:-1;x1+=direction*a.width/2;x2-=direction*b.width/2}
+      else{const direction=bc.y>=ac.y?1:-1;y1+=direction*a.height/2;y2-=direction*b.height/2}
+      const bend=horizontal?Math.max(28,Math.abs(x2-x1)*.42):Math.max(28,Math.abs(y2-y1)*.42);
+      const path=document.createElementNS("http://www.w3.org/2000/svg","path");
+      const d=horizontal?`M ${x1} ${y1} C ${x1+(x2>=x1?bend:-bend)} ${y1}, ${x2-(x2>=x1?bend:-bend)} ${y2}, ${x2} ${y2}`:`M ${x1} ${y1} C ${x1} ${y1+(y2>=y1?bend:-bend)}, ${x2} ${y2-(y2>=y1?bend:-bend)}, ${x2} ${y2}`;
+      path.setAttribute("d",d);path.setAttribute("class",`flow-edge ${edge.kind==="reference"?"reference":"runtime"}`);path.setAttribute("marker-end",`url(#flow-arrow-${edge.kind==="reference"?"reference":"runtime"})`);svg.appendChild(path);
+      if(edge.label){
+        const label=document.createElement("span");label.className=`flow-edge-label ${edge.kind==="reference"?"reference":"runtime"}`;label.textContent=localize(edge.label);label.style.left=`${(x1+x2)/2}px`;label.style.top=`${(y1+y2)/2}px`;canvas.appendChild(label);
+      }
+    }
+  }
+
+  function cssEscape(value){return window.CSS?.escape?window.CSS.escape(String(value)):String(value).replace(/[^a-zA-Z0-9_-]/g,"\\$&")}
+
   function renderStageList(){
-    document.querySelector("#stageList").innerHTML=config.stages.map((stage,index)=>`<button class="stage-button ${index===stageIndex?"active":""}" data-stage="${index}" type="button"><small>${String(index+1).padStart(2,"0")} · ${escapeHtml(localize(stage.kicker)||localize(stage.sourceLabel))}</small><span>${escapeHtml(localize(stage.title))}</span></button>`).join("");
+    document.querySelector("#stageList").innerHTML=config.stages.map((stage,index)=>`<button class="stage-button ${index===stageIndex?"active":""}" data-stage="${index}" type="button"><small>${escapeHtml(numberedKicker(index,localize(stage.kicker)||localize(stage.sourceLabel)))}</small><span>${escapeHtml(localize(stage.title))}</span></button>`).join("");
     document.querySelectorAll("[data-stage]").forEach(button=>button.addEventListener("click",()=>openStage(Number(button.dataset.stage))));
   }
 
@@ -87,8 +138,9 @@
   async function openStage(index){
     stageIndex=Math.max(0,Math.min(index,config.stages.length-1)); focusedSubstep=null;
     renderStageList();
+    document.querySelectorAll("[data-flow-stage]").forEach(node=>node.classList.toggle("active",Number(node.dataset.flowStage)===stageIndex));
     const stage=config.stages[stageIndex];
-    document.querySelector("#stageKicker").textContent=`${String(stageIndex+1).padStart(2,"0")} · ${localize(stage.kicker)||localize(stage.sourceLabel)}`;
+    document.querySelector("#stageKicker").textContent=numberedKicker(stageIndex,localize(stage.kicker)||localize(stage.sourceLabel));
     document.querySelector("#stageTitle").textContent=localize(stage.title);
     document.querySelector("#stageSummary").textContent=localize(stage.summary);
     const link=document.querySelector("#sourceLink"); link.href=stage.source; link.textContent=localize(stage.sourceLabel)||stage.source;
@@ -121,9 +173,10 @@
   }
 
   function escapeHtml(value){const node=document.createElement("span");node.textContent=String(value);return node.innerHTML}
-  function rerender(){setStaticCopy();renderStatus();renderArchitecture();renderStageList();renderSources();document.querySelector("#boundaryText").textContent=localize(config.boundary);openStage(stageIndex)}
+  function rerender(){setStaticCopy();renderFlowMap();renderStatus();renderArchitecture();renderStageList();renderSources();document.querySelector("#boundaryText").textContent=localize(config.boundary);openStage(stageIndex)}
   document.querySelector("#languageSelect").addEventListener("change",event=>{language=event.target.value;localStorage.setItem("mfl-pages-language",language);rerender()});
   document.querySelector("#prevStage").addEventListener("click",()=>openStage(stageIndex-1));
   document.querySelector("#nextStage").addEventListener("click",()=>openStage(stageIndex+1));
+  window.addEventListener("resize",()=>requestAnimationFrame(drawFlowConnections));
   rerender();
 })();

@@ -34,6 +34,34 @@ for (const page of pages) {
     }
   }
   requireTranslations(config.boundary, `${page} boundary`);
+  if (!config.flow || !Array.isArray(config.flow.nodes) || !config.flow.nodes.length) {
+    throw new Error(`${page} has no interactive flow map`);
+  }
+  for (const language of languages) {
+    if (!config.copy[language]?.flowTitle || !config.copy[language]?.flowIntro) {
+      throw new Error(`${page} is missing ${language} flow copy`);
+    }
+  }
+  const flowNodeIds = new Set();
+  config.flow.nodes.forEach((node, nodeIndex) => {
+    if (!Number.isInteger(node.stage) || node.stage < 0 || node.stage >= config.stages.length) {
+      throw new Error(`${page} flow node ${nodeIndex + 1} references an invalid stage`);
+    }
+    if (!node.id || flowNodeIds.has(node.id)) {
+      throw new Error(`${page} flow node ${nodeIndex + 1} has a missing or duplicate id`);
+    }
+    flowNodeIds.add(node.id);
+    if (node.title) requireTranslations(node.title, `${page} flow node ${node.id} title`);
+    if (node.caption) requireTranslations(node.caption, `${page} flow node ${node.id} caption`);
+  });
+  (config.flow.lanes || []).forEach((lane, laneIndex) => requireTranslations(lane.title, `${page} flow lane ${laneIndex + 1}`));
+  (config.flow.edges || []).forEach((edge, edgeIndex) => {
+    if (!flowNodeIds.has(edge.from) || !flowNodeIds.has(edge.to)) {
+      throw new Error(`${page} flow edge ${edgeIndex + 1} references a missing node`);
+    }
+    if (edge.label) requireTranslations(edge.label, `${page} flow edge ${edgeIndex + 1} label`);
+  });
+  requireTranslations(config.flow.note, `${page} flow note`);
 
   config.stages.forEach((stage, stageIndex) => {
     requireTranslations(stage.title, `${page} stage ${stageIndex + 1} title`);
