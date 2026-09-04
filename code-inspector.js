@@ -4,13 +4,17 @@
   if (!config) throw new Error("INSPECTOR_CONFIG is missing");
 
   const common = {
-    en:{language:"Language",back:"← Matter Frontier Lab",flow:"Live dependency map",runtimeDependency:"Runtime data dependency",referenceDependency:"Reference / verification path",parallelLane:"Parallel-capable lane",architecture:"Computation architecture",architectureIntro:"Each block has a narrow, inspectable responsibility.",stages:"Open the algorithm stage by stage",stagesIntro:"Choose a stage or substage. The table loads the exact repository source and annotates every displayed line.",line:"Line",code:"Exact source",substage:"Substage",annotation:"What this line does",previous:"Previous stage",next:"Next stage",sources:"Source inventory",boundary:"Scientific boundary",loading:"Loading exact source…",blank:"Blank line separates logical blocks.",comment:"Source comment documents intent or a scientific limitation.",import:"Imports a dependency used by this computation block.",definition:"Defines a reusable function, class, or hardware module.",condition:"Selects a path only when its stated condition is true.",loop:"Repeats the operation over candidates, samples, or hardware lanes.",return:"Returns the stage result to the next pipeline boundary.",assignment:"Creates or updates a named intermediate value.",hardware:"Declares or updates a synthesizable SystemVerilog signal.",fallback:"Executable project line in the selected stage."},
-    ru:{language:"Язык",back:"← Matter Frontier Lab",flow:"Актуальная карта зависимостей",runtimeDependency:"Зависимость данных при запуске",referenceDependency:"Эталонная / проверочная ветвь",parallelLane:"Параллельно исполнимая ветвь",architecture:"Архитектура вычислений",architectureIntro:"У каждого блока есть узкая и проверяемая ответственность.",stages:"Откройте алгоритм по этапам",stagesIntro:"Выберите этап или подэтап. Таблица загружает точный исходник репозитория и поясняет каждую показанную строку.",line:"Строка",code:"Точный исходник",substage:"Подэтап",annotation:"Что делает строка",previous:"Предыдущий этап",next:"Следующий этап",sources:"Состав исходников",boundary:"Научная граница",loading:"Загрузка точного исходника…",blank:"Пустая строка разделяет логические блоки.",comment:"Комментарий исходника фиксирует назначение или научное ограничение.",import:"Подключает зависимость, используемую этим вычислительным блоком.",definition:"Определяет переиспользуемую функцию, класс или аппаратный модуль.",condition:"Выбирает ветвь только при выполнении указанного условия.",loop:"Повторяет операцию для кандидатов, измерений или аппаратных каналов.",return:"Передаёт результат этапа на следующую границу конвейера.",assignment:"Создаёт или обновляет именованное промежуточное значение.",hardware:"Объявляет или обновляет синтезируемый сигнал SystemVerilog.",fallback:"Исполняемая строка проекта в выбранном этапе."},
-    he:{language:"שפה",back:"Matter Frontier Lab ←",flow:"מפת תלויות עדכנית",runtimeDependency:"תלות נתונים בזמן ריצה",referenceDependency:"נתיב ייחוס / אימות",parallelLane:"נתיב הניתן להרצה במקביל",architecture:"ארכיטקטורת החישוב",architectureIntro:"לכל בלוק אחריות צרה וניתנת לבדיקה.",stages:"פתיחת האלגוריתם שלב אחר שלב",stagesIntro:"בחרו שלב או תת־שלב. הטבלה טוענת את קוד המקור המדויק מהמאגר ומסבירה כל שורה מוצגת.",line:"שורה",code:"קוד מקור מדויק",substage:"תת־שלב",annotation:"מה השורה עושה",previous:"השלב הקודם",next:"השלב הבא",sources:"מפת קבצי המקור",boundary:"גבול מדעי",loading:"טוען קוד מקור מדויק…",blank:"שורה ריקה מפרידה בין בלוקים לוגיים.",comment:"הערת המקור מתעדת כוונה או מגבלה מדעית.",import:"מייבא תלות שבה משתמש בלוק החישוב.",definition:"מגדיר פונקציה, מחלקה או מודול חומרה לשימוש חוזר.",condition:"בוחר מסלול רק כאשר התנאי מתקיים.",loop:"חוזר על הפעולה עבור מועמדים, מדידות או ערוצי חומרה.",return:"מחזיר את תוצאת השלב לגבול הצינור הבא.",assignment:"יוצר או מעדכן ערך ביניים בעל שם.",hardware:"מכריז או מעדכן אות SystemVerilog הניתן לסינתזה.",fallback:"שורת פרויקט ניתנת להרצה בשלב שנבחר."}
+    en:{language:"Language",back:"← Matter Frontier Lab",demonstrations:"Hybrid demonstrations",tabShor:"01 · Shor / CUDA-Q",tabAsic:"02 · ASIC + CUDA-Q",tabQuark:"03 · Multi-quark search",flow:"Live dependency map",runtimeDependency:"Runtime data dependency",referenceDependency:"Reference / verification path",parallelLane:"Parallel-capable lane",architecture:"Computation architecture",architectureIntro:"Each block has a narrow, inspectable responsibility.",stages:"Open the algorithm stage by stage",stagesIntro:"Choose a stage or substage. The table loads the exact repository source and annotates every displayed line.",line:"Line",code:"Exact source",substage:"Substage",annotation:"What this line does",previous:"Previous stage",next:"Next stage",sources:"Source inventory",boundary:"Scientific boundary",loading:"Loading exact source…",blank:"Blank line separates logical blocks.",comment:"Source comment documents intent or a scientific limitation.",import:"Imports a dependency used by this computation block.",definition:"Defines a reusable function, class, or hardware module.",condition:"Selects a path only when its stated condition is true.",loop:"Repeats the operation over candidates, samples, or hardware lanes.",return:"Returns the stage result to the next pipeline boundary.",assignment:"Creates or updates a named intermediate value.",hardware:"Declares or updates a synthesizable SystemVerilog signal.",fallback:"Executable project line in the selected stage."},
+    ru:{language:"Язык",back:"← Matter Frontier Lab",demonstrations:"Гибридные демонстрации",tabShor:"01 · Шор / CUDA-Q",tabAsic:"02 · ASIC + CUDA-Q",tabQuark:"03 · Поиск кварковых систем",flow:"Актуальная карта зависимостей",runtimeDependency:"Зависимость данных при запуске",referenceDependency:"Эталонная / проверочная ветвь",parallelLane:"Параллельно исполнимая ветвь",architecture:"Архитектура вычислений",architectureIntro:"У каждого блока есть узкая и проверяемая ответственность.",stages:"Откройте алгоритм по этапам",stagesIntro:"Выберите этап или подэтап. Таблица загружает точный исходник репозитория и поясняет каждую показанную строку.",line:"Строка",code:"Точный исходник",substage:"Подэтап",annotation:"Что делает строка",previous:"Предыдущий этап",next:"Следующий этап",sources:"Состав исходников",boundary:"Научная граница",loading:"Загрузка точного исходника…",blank:"Пустая строка разделяет логические блоки.",comment:"Комментарий исходника фиксирует назначение или научное ограничение.",import:"Подключает зависимость, используемую этим вычислительным блоком.",definition:"Определяет переиспользуемую функцию, класс или аппаратный модуль.",condition:"Выбирает ветвь только при выполнении указанного условия.",loop:"Повторяет операцию для кандидатов, измерений или аппаратных каналов.",return:"Передаёт результат этапа на следующую границу конвейера.",assignment:"Создаёт или обновляет именованное промежуточное значение.",hardware:"Объявляет или обновляет синтезируемый сигнал SystemVerilog.",fallback:"Исполняемая строка проекта в выбранном этапе."},
+    he:{language:"שפה",back:"Matter Frontier Lab ←",demonstrations:"הדגמות היברידיות",tabShor:"01 · שור / CUDA-Q",tabAsic:"02 · ASIC + CUDA-Q",tabQuark:"03 · חיפוש רב־קווארקי",flow:"מפת תלויות עדכנית",runtimeDependency:"תלות נתונים בזמן ריצה",referenceDependency:"נתיב ייחוס / אימות",parallelLane:"נתיב הניתן להרצה במקביל",architecture:"ארכיטקטורת החישוב",architectureIntro:"לכל בלוק אחריות צרה וניתנת לבדיקה.",stages:"פתיחת האלגוריתם שלב אחר שלב",stagesIntro:"בחרו שלב או תת־שלב. הטבלה טוענת את קוד המקור המדויק מהמאגר ומסבירה כל שורה מוצגת.",line:"שורה",code:"קוד מקור מדויק",substage:"תת־שלב",annotation:"מה השורה עושה",previous:"השלב הקודם",next:"השלב הבא",sources:"מפת קבצי המקור",boundary:"גבול מדעי",loading:"טוען קוד מקור מדויק…",blank:"שורה ריקה מפרידה בין בלוקים לוגיים.",comment:"הערת המקור מתעדת כוונה או מגבלה מדעית.",import:"מייבא תלות שבה משתמש בלוק החישוב.",definition:"מגדיר פונקציה, מחלקה או מודול חומרה לשימוש חוזר.",condition:"בוחר מסלול רק כאשר התנאי מתקיים.",loop:"חוזר על הפעולה עבור מועמדים, מדידות או ערוצי חומרה.",return:"מחזיר את תוצאת השלב לגבול הצינור הבא.",assignment:"יוצר או מעדכן ערך ביניים בעל שם.",hardware:"מכריז או מעדכן אות SystemVerilog הניתן לסינתזה.",fallback:"שורת פרויקט ניתנת להרצה בשלב שנבחר."}
   };
 
   const sourceCache = new Map();
-  let language = localStorage.getItem("mfl-pages-language") || "en";
+  const supportedLanguages = new Set(["en", "ru", "he"]);
+  const requestedLanguage = new URLSearchParams(location.search).get("lang");
+  let language = supportedLanguages.has(requestedLanguage)
+    ? requestedLanguage
+    : (localStorage.getItem("mfl-pages-language") || localStorage.getItem("qcd-neutrino-language") || "en");
   let stageIndex = 0;
   let focusedSubstep = null;
   const localize = value => typeof value === "string" ? value : (value?.[language] || value?.en || "");
@@ -25,6 +29,37 @@
     document.querySelectorAll("[data-copy]").forEach(el=>{const key=el.dataset.copy; if(copy[key]) el.textContent=copy[key]});
     document.querySelectorAll("[data-common]").forEach(el=>el.textContent=ui(el.dataset.common));
     document.querySelector("#languageSelect").value=language;
+    persistLanguage();
+    renderDemoTabs();
+  }
+
+  function persistLanguage(){
+    localStorage.setItem("mfl-pages-language",language);
+    localStorage.setItem("qcd-neutrino-language",language);
+    const current=new URL(location.href);
+    current.searchParams.set("lang",language);
+    history.replaceState(null,"",current);
+  }
+
+  function withLanguage(path){
+    const url=new URL(path,location.href);
+    url.searchParams.set("lang",language);
+    return `${url.pathname}${url.search}${url.hash}`;
+  }
+
+  function renderDemoTabs(){
+    const root=document.querySelector("[data-demo-tabs]");
+    if(!root) return;
+    root.setAttribute("aria-label",ui("demonstrations"));
+    root.querySelectorAll("[data-demo-page]").forEach(link=>{
+      const key=link.dataset.demoPage;
+      const labels={shor:"tabShor",asic:"tabAsic",quark:"tabQuark"};
+      link.textContent=ui(labels[key]);
+      link.href=withLanguage(link.dataset.href||link.getAttribute("href"));
+      link.classList.toggle("active",document.body.dataset.demoPage===key);
+    });
+    const back=document.querySelector(".top-actions .ghost");
+    if(back) back.href=withLanguage("../");
   }
 
   function renderStatus(){
@@ -173,8 +208,8 @@
   }
 
   function escapeHtml(value){const node=document.createElement("span");node.textContent=String(value);return node.innerHTML}
-  function rerender(){setStaticCopy();renderFlowMap();renderStatus();renderArchitecture();renderStageList();renderSources();document.querySelector("#boundaryText").textContent=localize(config.boundary);openStage(stageIndex)}
-  document.querySelector("#languageSelect").addEventListener("change",event=>{language=event.target.value;localStorage.setItem("mfl-pages-language",language);rerender()});
+  function rerender(){setStaticCopy();renderFlowMap();renderStatus();renderArchitecture();renderStageList();renderSources();document.querySelector("#boundaryText").textContent=localize(config.boundary);config.renderInteractive?.(language);openStage(stageIndex)}
+  document.querySelector("#languageSelect").addEventListener("change",event=>{language=event.target.value;persistLanguage();rerender()});
   document.querySelector("#prevStage").addEventListener("click",()=>openStage(stageIndex-1));
   document.querySelector("#nextStage").addEventListener("click",()=>openStage(stageIndex+1));
   window.addEventListener("resize",()=>requestAnimationFrame(drawFlowConnections));

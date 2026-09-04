@@ -5,7 +5,7 @@ const path = require("path");
 const vm = require("vm");
 
 const root = path.resolve(__dirname, "..");
-const pages = ["hybrid-quantum-asic-demo", "multiquark-algorithm"];
+const pages = ["cudaq-shor-demo", "hybrid-quantum-asic-demo", "multiquark-algorithm"];
 const languages = ["en", "ru", "he"];
 
 function loadConfig(page) {
@@ -24,6 +24,13 @@ function requireTranslations(value, label) {
 }
 
 for (const page of pages) {
+  const html = fs.readFileSync(path.join(root, page, "index.html"), "utf8");
+  if (!html.includes(`data-demo-page="${page === "cudaq-shor-demo" ? "shor" : page === "hybrid-quantum-asic-demo" ? "asic" : "quark"}"`)) {
+    throw new Error(`${page} has no matching shared demonstration-tab identity`);
+  }
+  if (!html.includes("data-demo-tabs")) {
+    throw new Error(`${page} has no shared demonstration tabs`);
+  }
   const config = loadConfig(page);
   if (!config || !Array.isArray(config.stages) || !config.stages.length) {
     throw new Error(`${page} has no inspector stages`);

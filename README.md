@@ -11,13 +11,26 @@ It is a visual and computational education project. It clearly distinguishes exp
 ## Public GitHub Pages
 
 - [Matter Frontier Lab portal](https://holodininyaroslav.github.io/matter-frontier-lab/)
+- [CUDA-Q Shor algorithm — eight-qubit interactive inspector](https://holodininyaroslav.github.io/matter-frontier-lab/cudaq-shor-demo/)
 - [Simple ASIC + CUDA-Q hybrid algorithm — annotated source inspector](https://holodininyaroslav.github.io/matter-frontier-lab/hybrid-quantum-asic-demo/)
 - [Full multi-quark stable-system search — annotated production algorithm](https://holodininyaroslav.github.io/matter-frontier-lab/multiquark-algorithm/)
 
-Both algorithm inspectors are available in English, Russian, and Hebrew. They
+All three algorithm inspectors are connected by a shared tab bar and are
+available in English, Russian, and Hebrew. The selected language is persisted
+both in local storage and in navigation URLs. They
 load the exact versioned repository files instead of maintaining detached code
 copies, divide the implementation into stages and substages, and annotate every
 displayed source line.
+
+The first inspector is an interactive eight-qubit CUDA-Q Shor demonstration
+for the compiled teaching case `N=15, a=2`. It animates register preparation,
+superposition, controlled modular powers, inverse QFT, measurement, continued
+fractions and classical GCD recovery. The executable source supports a
+dependency-free classical preview and, in a supported CUDA-Q environment,
+`qpp-cpu`, NVIDIA state-vector simulation or an explicitly configured provider
+target. The browser animation is an ideal explanatory model and never claims to
+be a physical QPU execution; the fixed modular circuit is not a general RSA
+factorizer.
 
 ## What the laboratory includes
 
