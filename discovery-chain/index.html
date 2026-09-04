@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Matter Frontier Discovery Chain</title>
+  <meta name="description" content="EOS/Vaulta-compatible proof-of-useful-scientific-work architecture for distributed multi-quark searches.">
+  <link rel="icon" href="../assets/matter-frontier-lab-avatar.png">
+  <link rel="stylesheet" href="./styles.css?v=1">
+</head>
+<body>
+<main class="shell">
+  <header class="topbar">
+    <a class="brand" href="../"><span class="brand-mark">⌬</span><span><b>MATTER FRONTIER LAB</b><small>DISCOVERY CHAIN · LOCAL TESTNET</small></span></a>
+    <div class="top-actions"><a class="ghost" id="algorithmLink" href="../multiquark-algorithm/" data-i18n="algorithmLink">Inspect search algorithm</a><label><span data-i18n="language">Language</span><select id="languageSelect"><option value="en">English</option><option value="ru">Русский</option><option value="he">עברית</option></select></label></div>
+  </header>
+
+  <section class="hero">
+    <div><p class="eyebrow" data-i18n="eyebrow">PROOF OF REPRODUCIBLE DISCOVERY</p><h1 data-i18n="title">Scale useful multi-quark searches without paying twice for the same state cell.</h1><p class="lede" data-i18n="intro">The chain coordinates deterministic search partitions across CPU, GPU, FPGA and quantum adapters. Scientific payloads run off-chain; canonical commitments, verification and neutral test rewards enter the ledger.</p></div>
+    <aside class="network-card"><span id="networkDot" class="dot"></span><p data-i18n="network">Network</p><strong id="networkName">documentation mode</strong><small id="networkMessage" data-i18n="networkHint">Open through the local Frontier Lab server to control the persistent testnet.</small></aside>
+  </section>
+
+  <nav class="section-tabs"><a href="#architecture" data-i18n="tabArchitecture">Architecture</a><a href="#console" data-i18n="tabConsole">Testnet console</a><a href="#contract" data-i18n="tabContract">EOS/Vaulta contract</a><a href="#science" data-i18n="tabScience">Scientific boundary</a></nav>
+
+  <section id="architecture" class="section">
+    <div class="section-head"><div><p class="eyebrow" data-i18n="architectureEyebrow">GLOBAL COMPUTE GRAPH</p><h2 data-i18n="architectureTitle">Consensus and physics remain separate</h2></div><p data-i18n="architectureText">Vaulta records ownership and state transitions. Worker nodes execute versioned scientific workloads. Independent validators reproduce selected cells before settlement.</p></div>
+    <div class="flow">
+      <article><span>01</span><b data-i18n="flow1Title">Canonical partitioner</b><p data-i18n="flow1Text">Composition, Hamiltonian, coupling, orbital basis, seed and candidate range produce one state-space hash.</p></article><i>→</i>
+      <article><span>02</span><b data-i18n="flow2Title">Heterogeneous scheduler</b><p data-i18n="flow2Text">CPU handles constraints; GPU handles profiled batches; FPGA filters streams; QPU adapters receive bounded subproblems.</p></article><i>→</i>
+      <article><span>03</span><b data-i18n="flow3Title">Commit and reproduce</b><p data-i18n="flow3Text">Artifacts stay off-chain while hashes, provenance and verification votes are committed.</p></article><i>→</i>
+      <article><span>04</span><b data-i18n="flow4Title">Settle and expand</b><p data-i18n="flow4Text">Verified work earns neutral units and seeds adjacent, previously unexplored cells.</p></article>
+    </div>
+    <div class="principles">
+      <article><b data-i18n="p1Title">No duplicate reward</b><p data-i18n="p1Text">A globally unique state hash prevents a second payable shard for the same canonical inputs.</p></article>
+      <article><b data-i18n="p2Title">No physics in WASM</b><p data-i18n="p2Text">Large arrays and scientific packages stay on workers; the chain stores compact commitments.</p></article>
+      <article><b data-i18n="p3Title">No token-price claim</b><p data-i18n="p3Text">The prototype uses non-financial reward units. A real asset requires audit and legal design.</p></article>
+    </div>
+  </section>
+
+  <section id="console" class="section console">
+    <div class="section-head"><div><p class="eyebrow" data-i18n="consoleEyebrow">FRONTIER LAB CONTROL PLANE</p><h2 data-i18n="consoleTitle">Persistent local testnet</h2></div><div class="buttons"><button id="bootstrapButton" data-i18n="bootstrap">Connect local hardware</button><button id="epochButton" data-i18n="epoch">Run next epoch</button><button id="resetButton" class="danger" data-i18n="reset">Reset testnet</button></div></div>
+    <p id="notice" class="notice" data-i18n="docsNotice">GitHub Pages shows the complete architecture. Live controls activate automatically at 127.0.0.1:8892.</p>
+    <div id="metrics" class="metrics"><article><span>—</span><b data-i18n="metricWorkers">workers</b></article><article><span>—</span><b data-i18n="metricVerified">verified cells</b></article><article><span>—</span><b data-i18n="metricDuplicates">duplicates prevented</b></article><article><span>—</span><b data-i18n="metricHeight">block height</b></article></div>
+
+    <div class="control-grid">
+      <form id="taskForm" class="panel">
+        <div class="panel-head"><div><p class="eyebrow" data-i18n="newTaskEyebrow">SEARCH CAMPAIGN</p><h3 data-i18n="newTaskTitle">Create deterministic shards</h3></div></div>
+        <label><span data-i18n="composition">Quark composition</span><input name="composition" value="u u d d s s" required></label>
+        <div class="form-row"><label><span data-i18n="shards">State cells</span><input name="shards" type="number" min="2" max="64" value="12"></label><label><span data-i18n="level">Hamiltonian level</span><select name="hamiltonianLevel"><option>A</option><option selected>B</option><option>C</option></select></label></div>
+        <div class="form-row"><label><span data-i18n="couplingMin">Coupling min</span><input name="couplingMin" type="number" step="0.05" min="0" max="2" value="0.55"></label><label><span data-i18n="couplingMax">Coupling max</span><input name="couplingMax" type="number" step="0.05" min="0" max="2" value="1.45"></label></div>
+        <label class="check"><input name="quantumAudit" type="checkbox" checked><span data-i18n="quantumAudit">Run a small hybrid scheduler probe when a quantum simulator is present</span></label>
+        <button type="submit" data-i18n="createTask">Create campaign</button>
+      </form>
+      <form id="qpuForm" class="panel">
+        <div class="panel-head"><div><p class="eyebrow" data-i18n="qpuEyebrow">OPTIONAL LOCAL BRIDGE</p><h3 data-i18n="qpuTitle">Register an external QPU adapter</h3></div></div>
+        <p data-i18n="qpuText">Cloud credentials remain in a user-owned loopback adapter. The blockchain records only its capability hash.</p>
+        <label><span data-i18n="qpuName">Provider/backend label</span><input name="name" value="IBM Quantum adapter"></label>
+        <label><span data-i18n="qpuUrl">Loopback adapter URL</span><input name="adapterUrl" placeholder="http://127.0.0.1:8910"></label>
+        <button type="submit" data-i18n="registerQpu">Register adapter</button>
+      </form>
+    </div>
+
+    <div class="data-grid"><section class="panel"><div class="panel-head"><h3 data-i18n="workersTitle">Connected workers</h3><span id="workerCount">0</span></div><div class="table-scroll"><table><thead><tr><th data-i18n="worker">Worker</th><th data-i18n="kind">Kind</th><th data-i18n="backend">Backend</th><th data-i18n="jobs">Jobs</th><th data-i18n="reward">Units</th></tr></thead><tbody id="workersBody"></tbody></table></div></section>
+      <section class="panel"><div class="panel-head"><h3 data-i18n="tasksTitle">Search campaigns</h3><span id="taskCount">0</span></div><div id="tasksList" class="task-list"></div></section></div>
+    <section class="panel ledger"><div class="panel-head"><h3 data-i18n="ledgerTitle">Recent immutable events</h3><span id="blockCount">0</span></div><div id="blocksList" class="blocks"></div></section>
+  </section>
+
+  <section id="contract" class="section">
+    <div class="section-head"><div><p class="eyebrow" data-i18n="contractEyebrow">ANTELOPE C++ CONTRACT</p><h2 data-i18n="contractTitle">The same state machine can be deployed on Vaulta</h2></div><a class="source" href="https://github.com/Holodininyaroslav/matter-frontier-lab/blob/main/blockchain/contracts/mflchain/mflchain.cpp" target="_blank" rel="noreferrer" data-i18n="openContract">Open contract source ↗</a></div>
+    <div class="transition-table"><div><b>createtask</b><span data-i18n="action1">Commit a versioned campaign manifest.</span></div><div><b>addshard</b><span data-i18n="action2">Register only a globally new state-space hash.</span></div><div><b>claim</b><span data-i18n="action3">Bind one active worker to one pending shard.</span></div><div><b>commit</b><span data-i18n="action4">Publish result and artifact hashes.</span></div><div><b>verify</b><span data-i18n="action5">Accept or reopen work through the scientific authority.</span></div><div><b>settle</b><span data-i18n="action6">Credit verified work exactly once.</span></div></div>
+    <div class="warning"><b data-i18n="deploymentTitle">Deployment status</b><p data-i18n="deploymentText">The repository contains an EOSIO.CDT-compatible contract and an executable local mirror. It has not been deployed to public Vaulta and has not received a security audit.</p></div>
+  </section>
+
+  <section id="science" class="section science">
+    <div><p class="eyebrow" data-i18n="scienceEyebrow">SCIENTIFIC CONTRACT</p><h2 data-i18n="scienceTitle">A verified shard is verified computation, not a discovered particle</h2><p data-i18n="scienceText">The current worker executes a phenomenological color-spin screening model. Promotion to a physical claim still requires traceable lattice ensembles, explicit SU(3) bases, correlator fits, finite-volume and continuum checks, and independent review.</p><a class="primary-link" id="algorithmBottomLink" href="../multiquark-algorithm/" data-i18n="algorithmBottom">Open the annotated multi-quark algorithm →</a></div>
+    <aside><b data-i18n="nextTitle">Scale-up contract</b><ul><li data-i18n="next1">One canonical manifest per state cell</li><li data-i18n="next2">Content-addressed result bundles</li><li data-i18n="next3">Sampled independent reproduction</li><li data-i18n="next4">CPU/GPU/QPU provenance kept separate</li><li data-i18n="next5">No scientific truth decided by token voting</li></ul></aside>
+  </section>
+</main>
+<script src="./app.js?v=1"></script>
+</body>
+</html>
+

@@ -16,7 +16,7 @@
     }
   </script>
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
-  <link rel="stylesheet" href="./styles.css?v=20260903-cloud-grover">
+  <link rel="stylesheet" href="./styles.css?v=20260904-discovery-chain">
 </head>
 <body>
   <div class="app-shell">
@@ -206,7 +206,10 @@
           <h2 id="multiquarkModalTitle">Поиск многокварковых кандидатов</h2>
           <p>Физические фильтры, эффективный гамильтониан, пороги распада и прототип FPGA/ASIC-конвейера на SystemVerilog.</p>
         </div>
-        <button id="multiquarkModalClose" class="small-icon-btn" type="button" aria-label="Закрыть"><i data-lucide="x"></i></button>
+        <div class="mq-modal-actions">
+          <a class="mq-chain-link" href="../discovery-chain/" title="Открыть распределённую Discovery Chain"><i data-lucide="network"></i><span>Discovery Chain</span></a>
+          <button id="multiquarkModalClose" class="small-icon-btn" type="button" aria-label="Закрыть"><i data-lucide="x"></i></button>
+        </div>
       </header>
       <div class="mq-lab-layout">
         <aside class="mq-config-panel">

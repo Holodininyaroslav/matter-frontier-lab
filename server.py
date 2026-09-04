@@ -40,6 +40,8 @@ from scientific_backend.devsim_adapter import solve as solve_semiconductor_tcad
 from scientific_backend.devsim_adapter import status as devsim_status
 from scientific_backend.multiquark_discovery import solve as solve_multiquark_discovery
 from scientific_backend.multiquark_discovery import status as multiquark_discovery_status
+from scientific_backend.discovery_chain import chain as discovery_chain
+from scientific_backend.discovery_chain import status as discovery_chain_status
 
 
 try:
@@ -98,6 +100,7 @@ def science_status() -> dict[str, Any]:
         status["chemistry"] = chemistry_status()
         status["devsim"] = devsim_status()
         status["multiquarkDiscovery"] = multiquark_discovery_status()
+        status["discoveryChain"] = discovery_chain_status()
         return status
     except Exception as exc:
         return {"available": False, "engine": "python-standard-library-fallback", "error": f"{type(exc).__name__}: {exc}"}
@@ -712,13 +715,20 @@ class LabHandler(SimpleHTTPRequestHandler):
                     "devsim": "active" if science.get("devsim", {}).get("available") else "optional-not-installed",
                     "multiquark_discovery": "active" if science.get("multiquarkDiscovery", {}).get("available") else "unavailable",
                     "multiquark_directml": "active" if science.get("multiquarkDiscovery", {}).get("gpuThresholdKernel", {}).get("available") else "optional-not-installed",
+                    "discovery_chain_testnet": "active" if science.get("discoveryChain", {}).get("available") else "unavailable",
                 },
             })
+            return
+        if request_path in {"/api/discovery-chain", "/matter-lab/api/discovery-chain"}:
+            self.send_json({"ok": True, "result": discovery_chain().snapshot()})
             return
         super().do_GET()
 
     def do_POST(self) -> None:
         request_path = self.path.split("?", 1)[0]
+        if request_path.startswith("/api/discovery-chain/") or request_path.startswith("/matter-lab/api/discovery-chain/"):
+            self.handle_discovery_chain(request_path)
+            return
         if request_path not in {"/api/solve", "/matter-lab/api/solve", "/api/multiquark/search", "/matter-lab/api/multiquark/search"}:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
@@ -736,6 +746,42 @@ class LabHandler(SimpleHTTPRequestHandler):
             self.send_json({"ok": True, "engine": engine, "elapsed_ms": elapsed_ms, "result": result})
         except (ValueError, TypeError, json.JSONDecodeError) as exc:
             self.send_json({"ok": False, "error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+
+    def handle_discovery_chain(self, request_path: str) -> None:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(length) or b"{}")
+            if not isinstance(payload, dict):
+                raise ValueError("payload must be an object")
+            action = request_path.rsplit("/", 1)[-1]
+            testnet = discovery_chain()
+            if action == "bootstrap":
+                result = testnet.bootstrap()
+            elif action == "task":
+                values = payload.get("values", payload)
+                if not isinstance(values, dict):
+                    raise ValueError("values must be an object")
+                result = testnet.create_task(values)
+            elif action == "epoch":
+                values = payload.get("values", payload)
+                if not isinstance(values, dict):
+                    raise ValueError("values must be an object")
+                result = testnet.run_epoch(values)
+            elif action == "worker":
+                values = payload.get("values", payload)
+                if not isinstance(values, dict):
+                    raise ValueError("values must be an object")
+                result = testnet.register_worker(values)
+            elif action == "reset":
+                result = testnet.reset()
+            else:
+                self.send_error(HTTPStatus.NOT_FOUND)
+                return
+            self.send_json({"ok": True, "result": result})
+        except (ValueError, TypeError, json.JSONDecodeError) as exc:
+            self.send_json({"ok": False, "error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+        except Exception as exc:
+            self.send_json({"ok": False, "error": f"{type(exc).__name__}: {exc}"}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
     def send_json(self, payload: dict[str, Any], status: int = HTTPStatus.OK) -> None:
         encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")

@@ -14,6 +14,7 @@ It is a visual and computational education project. It clearly distinguishes exp
 - [CUDA-Q Shor algorithm — eight-qubit interactive inspector](https://holodininyaroslav.github.io/matter-frontier-lab/cudaq-shor-demo/)
 - [Simple ASIC + CUDA-Q hybrid algorithm — annotated source inspector](https://holodininyaroslav.github.io/matter-frontier-lab/hybrid-quantum-asic-demo/)
 - [Full multi-quark stable-system search — annotated production algorithm](https://holodininyaroslav.github.io/matter-frontier-lab/multiquark-algorithm/)
+- [Discovery Chain — EOS/Vaulta architecture and live local testnet console](https://holodininyaroslav.github.io/matter-frontier-lab/discovery-chain/)
 
 All three algorithm inspectors are connected by a shared tab bar and are
 available in English, Russian, and Hebrew. The selected language is persisted
@@ -21,6 +22,10 @@ both in local storage and in navigation URLs. They
 load the exact versioned repository files instead of maintaining detached code
 copies, divide the implementation into stages and substages, and annotate every
 displayed source line.
+
+The Discovery Chain page uses the same three-language persistence. On GitHub
+Pages it is an architecture document; through the local Frontier Lab server it
+becomes a live control console for the persistent protocol testnet.
 
 The first inspector is an interactive eight-qubit CUDA-Q Shor demonstration
 for the compiled teaching case `N=15, a=2`. It animates register preparation,
@@ -89,6 +94,37 @@ the external `multiquark-lattice-qcd` workflow are represented as future
 independent validation adapters. The current machine has no supported CUDA GPU
 for QUDA, so the interface never presents the effective screening result as a
 QUDA/Chroma result.
+
+## Matter Frontier Discovery Chain
+
+The multi-quark solver can now be divided into deterministic state-space cells
+and coordinated by a local EOS/Vaulta-shaped testnet. Each cell has a canonical
+SHA-256 identity covering the solver schema, composition, Hamiltonian, orbital
+basis, coupling, candidate range, seed and budget. A global uniqueness rule
+prevents a second payable shard for inputs that have already been registered,
+including overlaps between separate campaigns.
+
+The local chain automatically registers available CPU, ONNX Runtime DirectML
+GPU and DirectML quantum-simulator workers. Scientific payloads execute
+off-chain; the ledger records assignments, content hashes, compact provenance,
+verification transitions and non-financial test reward units. A loopback QPU
+adapter contract allows user-owned provider processes to participate without
+putting cloud credentials in the browser or ledger. The included adapter is a
+local simulator example and does not claim physical QPU execution.
+
+The matching Antelope C++ contract is in
+[`blockchain/contracts/mflchain`](blockchain/contracts/mflchain), and the
+executable local mirror is
+[`scientific_backend/discovery_chain.py`](scientific_backend/discovery_chain.py).
+Open `http://127.0.0.1:8892/discovery-chain/` to control it from Frontier Lab.
+The full protocol, security boundary and scaling path are documented in
+[`docs/discovery-chain-architecture.md`](docs/discovery-chain-architecture.md).
+
+This is not yet a deployed public Vaulta network, audited smart contract or
+financial token. It is a working orchestration/testnet prototype. Scientific
+consensus remains independent of token consensus: a verified shard is evidence
+of reproducible computation, not evidence that a screened state exists in
+nature.
 
 ## Black-hole merger and gravitational-wave laboratory
 

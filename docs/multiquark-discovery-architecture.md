@@ -61,6 +61,20 @@ The experiment identifier is the first 12 hexadecimal characters of SHA-256
 over the canonical manifest. Identical manifests therefore produce the same
 identifier and deterministic shortlist.
 
+## Distributed search partitions
+
+The solver schema `matter-frontier.multiquark-experiment/v2` also accepts a
+deterministic `candidateOffset`. Candidate identifiers are derived from the
+global candidate index, and each response includes a `searchPartition` witness
+with `shardId`, `cellIndex`, `candidateOffset` and `stateSpaceHash`. This makes
+independent cells safe to schedule across CPU/GPU workers without silently
+renumbering or repeating candidates.
+
+The accompanying [Discovery Chain architecture](discovery-chain-architecture.md)
+hashes the complete state-cell input, rejects a second payable shard with the
+same hash and commits only compact provenance and result hashes. This changes
+the orchestration boundary, not the scientific validity of the effective model.
+
 ## Hardware partition
 
 The first FPGA/ASIC block is intentionally a workload compressor, not an
@@ -106,6 +120,11 @@ Example request:
 The response includes the experiment manifest, candidate shortlist, threshold
 table, pipeline reduction counts, hardware metadata, generated SystemVerilog,
 testbench and RTL-verification status.
+
+Distributed campaigns use `POST /api/discovery-chain/task` and execute bounded
+work through `POST /api/discovery-chain/epoch`. The local ledger delegates each
+new state cell back to this same solver, then verifies the returned partition
+witness before accepting its result hash.
 
 ## Planned scientific upgrades
 

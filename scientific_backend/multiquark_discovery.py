@@ -100,10 +100,17 @@ def _candidate_rows(tokens: list[str], values: dict[str, Any], threshold: float)
     orbital_modes = max(1, min(int(values.get("orbitalModes", 2)), 4))
     level = str(values.get("hamiltonianLevel", "A"))
     count = max(4, min(int(values.get("candidateLimit", 12)), 24))
+    candidate_offset = max(0, int(values.get("candidateOffset", 0)))
     n = len(tokens)
     mass_scale = sum(QUARKS[token[0]]["mass"] for token in tokens) / max(n, 1)
     rows = []
-    for index in range(count):
+    for local_index in range(count):
+        # Distributed equivalent of ``for index in range(count)`` with a global shard offset.
+        # A globally stable index makes disjoint blockchain work shards produce
+        # disjoint candidate labels and model samples.  The single-machine UI
+        # keeps the historical zero offset, while the discovery-chain scheduler
+        # assigns non-overlapping offsets to distributed workers.
+        index = candidate_offset + local_index
         j2 = (index % (min(n, 5) + 1)) * 2 if n % 2 == 0 else 1 + (index % min(n, 5)) * 2
         parity = 1 if (index // 2) % 2 == 0 else -1
         orbital = index % orbital_modes
@@ -120,7 +127,7 @@ def _candidate_rows(tokens: list[str], values: dict[str, Any], threshold: float)
         margin = threshold - energy
         basis_dimension = max(1, int((6 ** min(n, 8)) / (1 + index) * (1 + orbital * 0.35)))
         rows.append({
-            "id": f"MQ-{index + 1:03d}",
+            "id": f"MQ-{index + 1:06d}",
             "composition": " ".join(tokens),
             "J": j2 / 2.0,
             "parity": "+" if parity > 0 else "−",
@@ -312,8 +319,14 @@ def solve(values: dict[str, Any]) -> dict[str, Any]:
         key=lambda row: (row["energyMeV"], row["uncertaintyMeV"]),
     )
     best = ranked[0] if ranked else None
+    search_partition = {
+        "shardId": str(values.get("shardId", "local-standalone")),
+        "cellIndex": max(0, int(values.get("cellIndex", 0))),
+        "candidateOffset": max(0, int(values.get("candidateOffset", 0))),
+        "stateSpaceHash": str(values.get("stateSpaceHash", "local-unpartitioned")),
+    }
     manifest = {
-        "schema": "matter-frontier.multiquark-experiment/v1",
+        "schema": "matter-frontier.multiquark-experiment/v2",
         "composition": tokens,
         "quantumNumbers": quantum,
         "hamiltonianLevel": str(values.get("hamiltonianLevel", "A")),
@@ -321,7 +334,8 @@ def solve(values: dict[str, Any]) -> dict[str, Any]:
         "orbitalModes": orbital_modes,
         "searchBudget": generated,
         "precision": "float64-host / signed-integer-SystemVerilog-prototype",
-        "randomSeed": 0,
+        "randomSeed": max(0, int(values.get("randomSeed", 0))),
+        "searchPartition": search_partition,
         "backend": "python-effective-model + generated-systemverilog",
         "limitations": "Not lattice QCD; color-singlet triality is necessary but not a complete SU(3) Clebsch-Gordan construction.",
     }
@@ -329,6 +343,7 @@ def solve(values: dict[str, Any]) -> dict[str, Any]:
     result: dict[str, Any] = {
         "experimentId": digest,
         "manifest": manifest,
+        "searchPartition": search_partition,
         "quantumNumbers": quantum,
         "thresholds": thresholds,
         "pipeline": [
@@ -353,7 +368,7 @@ def solve(values: dict[str, Any]) -> dict[str, Any]:
         },
         "gpuAcceleration": gpu_acceleration,
         "provenance": {
-            "engine": "multiquark-effective-screening-v1",
+            "engine": "multiquark-effective-screening-v2-sharded",
             "scientificPackage": False,
             "validatedExternalSimulation": False,
             "externalValidationReady": ["Chroma", "QUDA", "SIMULATeQCD", "Grid", "multiquark-lattice-qcd"],
@@ -372,7 +387,8 @@ def status() -> dict[str, Any]:
     gpu = gpu_threshold_status()
     return {
         "available": True,
-        "engine": "multiquark-effective-screening-v1",
+        "engine": "multiquark-effective-screening-v2-sharded",
+        "deterministicSearchShards": True,
         "gpuThresholdKernel": gpu,
         "systemVerilogGenerator": True,
         "rtlSimulator": shutil.which("iverilog") or shutil.which("verilator"),

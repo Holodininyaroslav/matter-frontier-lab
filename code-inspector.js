@@ -54,7 +54,7 @@
     root.querySelectorAll("[data-demo-page]").forEach(link=>{
       const key=link.dataset.demoPage;
       const labels={shor:"tabShor",asic:"tabAsic",quark:"tabQuark"};
-      link.textContent=ui(labels[key]);
+      if(labels[key]) link.textContent=ui(labels[key]);
       link.href=withLanguage(link.dataset.href||link.getAttribute("href"));
       link.classList.toggle("active",document.body.dataset.demoPage===key);
     });
