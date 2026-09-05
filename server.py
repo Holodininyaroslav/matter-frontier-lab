@@ -37,6 +37,8 @@ from scientific_backend.gpu_quantum_simulator import status as gpu_quantum_simul
 from scientific_backend.acceleration_registry import status as acceleration_status
 from scientific_backend.chemistry_adapter import solve as solve_quantum_chemistry
 from scientific_backend.chemistry_adapter import status as chemistry_status
+from scientific_backend.biomolecule_adapter import solve as solve_biomolecule
+from scientific_backend.biomolecule_adapter import status as biomolecule_status
 from scientific_backend.devsim_adapter import solve as solve_semiconductor_tcad
 from scientific_backend.devsim_adapter import status as devsim_status
 from scientific_backend.multiquark_discovery import solve as solve_multiquark_discovery
@@ -99,6 +101,7 @@ def science_status() -> dict[str, Any]:
         status["gpuQuantumSimulator"] = gpu_quantum_simulator_status()
         status["acceleration"] = acceleration_status()
         status["chemistry"] = chemistry_status()
+        status["biomolecule"] = biomolecule_status()
         status["devsim"] = devsim_status()
         status["multiquarkDiscovery"] = multiquark_discovery_status()
         status["discoveryChain"] = discovery_chain_status()
@@ -589,7 +592,9 @@ def solve_black_hole_merger(values: dict[str, Any], points: int = 180) -> dict[s
 
 
 def solve(model: str, values: dict[str, Any]) -> dict[str, Any]:
-    if model == "quantumChemistryLab":
+    if model in {"dnaWorkbench", "proteinWorkbench", "smartMatterProteinRepair"}:
+        return solve_biomolecule(values)
+    if model in {"quantumChemistryLab", "smartMatterAssembler"}:
         return solve_quantum_chemistry(values)
     if model == "semiconductorDeviceLab":
         return solve_semiconductor_tcad(values)
@@ -714,7 +719,17 @@ class LabHandler(SecureLocalMixin, SimpleHTTPRequestHandler):
                     "pycbc_lalsuite": "active" if science.get("pycbcWsl", {}).get("available") else "optional-not-installed",
                     "pythia8_hepmc3": "active" if science.get("pythiaWsl", {}).get("available") else "optional-not-installed",
                     "einstein_toolkit": "reference-data-active" if science.get("einsteinToolkitData", {}).get("available") else "external-waveform-import-ready",
-                    "rdkit_pyscf": "active" if science.get("chemistry", {}).get("available") else "optional-not-installed",
+                    "rdkit_pyscf": (
+                        "active"
+                        if science.get("chemistry", {}).get("quantumAvailable")
+                        else "rdkit-active-pyscf-unavailable"
+                        if science.get("chemistry", {}).get("rdkit", {}).get("available")
+                        else "optional-not-installed"
+                    ),
+                    "molstar_biomolecules": "active" if science.get("biomolecule", {}).get("molstar", {}).get("available") else "unavailable",
+                    "alphafold_db": "remote-on-demand" if science.get("biomolecule", {}).get("alphaFoldDb", {}).get("available") else "unavailable",
+                    "colabfold_local": "active" if science.get("biomolecule", {}).get("colabfoldLocal", {}).get("available") else "optional-not-installed",
+                    "chimerax_bridge": "active" if science.get("biomolecule", {}).get("chimerax", {}).get("available") else "optional-not-running",
                     "devsim": "active" if science.get("devsim", {}).get("available") else "optional-not-installed",
                     "multiquark_discovery": "active" if science.get("multiquarkDiscovery", {}).get("available") else "unavailable",
                     "multiquark_directml": "active" if science.get("multiquarkDiscovery", {}).get("gpuThresholdKernel", {}).get("available") else "optional-not-installed",
@@ -749,6 +764,11 @@ class LabHandler(SecureLocalMixin, SimpleHTTPRequestHandler):
             self.send_json({"ok": True, "engine": engine, "elapsed_ms": elapsed_ms, "result": result})
         except (ValueError, TypeError, json.JSONDecodeError) as exc:
             self.send_json({"ok": False, "error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+        except Exception as exc:
+            # Scientific adapters may be unavailable independently (for
+            # example WSL2 cannot allocate its VM). Return a structured API
+            # error instead of dropping the HTTP connection.
+            self.send_json({"ok": False, "error": f"{type(exc).__name__}: {exc}"}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
     def handle_discovery_chain(self, request_path: str) -> None:
         try:

@@ -1118,6 +1118,11 @@ export function setCatalogLocale(locale = 'en') {
         const pattern = model.parameters.find((parameter) => parameter.key === 'wavePattern');
         if (pattern) pattern.options = [['standing', 'גל עומד'], ['centralPeak', 'גל נע — שיא מרכזי']];
       }
+      if (model.visual === 'mOrchestrator') {
+        model.subtitle = 'השערת המחבר · מיתוג ספין מקומי · בונה 2–8 חורים שחורים';
+        model.description = 'כל הגופים נעים לפי כוחות מחושבים. האלגוריתם חוזה התקרבות מסוכנת ומפעיל ערוצי שדה M מכוונים במצב ספין 2. לפי חוק ההשערה המשיכה נחלשת והתנע הזוויתי הקיים מאפשר מעבר משיקי. רק שדה M נשלט.';
+        model.applicability = 'החלשת כבידה באמצעות ספין 2 היא השערת המחבר, לא תוצאה מוכחת של יחסות כללית. זהו קירוב ניוטוני עם פיזור אנרגיה המחשה. בדיקה סופית אינה מוכיחה יציבות נצחית.';
+      }
       if (model.id === 'complexSpinQuasiparticle') {
         model.title = 'חלקיק M';
         model.subtitle = 'קוואזי־חלקיק 4D בעל ספין מרוכב · הקרנה אפקטיבית סימטרית־PT';
@@ -1128,6 +1133,30 @@ export function setCatalogLocale(locale = 'en') {
           probeType: 'גשוש תלת־ממדי', probeAxis: 'ציר יעד של ספין M', fieldTension: 'מתיחות שדה M'
         };
         model.parameters.forEach((parameter) => { parameter.label = parameterLabels[parameter.key] || parameter.label; });
+      }
+      if (model.id === 'smartMatterAssembler') {
+        model.subtitle = 'התממשות מקואורדינטת i · גרף מולקולרי של RDKit';
+        model.description = 'חלקיקי חומר חכם היפותטיים מוסטים תחילה לאורך קואורדינטת i ולכן אינם נראים. בחציית i=0 הם מופיעים בתלת־ממד מיד בגודל אטומי מלא, ואז מורכבים לפי גרף וקונפורמר שחושבו ב‑RDKit.';
+        model.applicability = 'הגרף, תכונות האטומים וקונפורמר שדה הכוח מגיעים מ‑RDKit. חומר ניתן לתכנות ותנועה דרך i הם השערת המחבר, לא דינמיקה מולקולרית או ראיה לממד נוסף.';
+        model.statusLabel = 'השערת מחבר + כימיה מדעית';
+      }
+      if (model.id === 'smartMatterProteinRepair') {
+        model.subtitle = 'נזק גמא · ΔG מולקולרי · תחליפים מקואורדינטת i';
+        model.description = 'מבנה החלבון הניסויי 1CRN מ‑RCSB מומר לגרף מולקולרי ב‑RDKit. תא נזק מדגים שרשרת העברת אנרגיה מקומית, ותכנית התיקון משחררת בדיוק את מספר חלקיקי החומר החכם הדרוש להשלמת האטומים והקשרים החסרים.';
+        model.applicability = 'קואורדינטות PDB והגרף הכימי הם נתונים מדעיים. מודל הנזק הוא קירוב המחשה ואינו Geant4‑DNA; חומר חכם ומעבר דרך i הם השערת המחבר. יציבות דינמית דורשת בעתיד OpenMM או GROMACS.';
+        model.statusLabel = 'MVP מדעי + טכנולוגיה היפותטית';
+      }
+      if (model.id === 'dnaWorkbench') {
+        model.subtitle = 'Mol* תלת־ממד · שש מסגרות קריאה · ORF לחלבון';
+        model.description = 'סביבת Mol* המובנית פותחת מבני חומצות גרעין ניסיוניים מ‑PDB. השרת המקומי מנרמל FASTA, מחשב גדיל משלים הפוך, מתרגם שש מסגרות קריאה ומאתר ORF לפני הכנת בקשת קיפול חלבון.';
+        model.applicability = 'אין להזין DNA ל‑AlphaFold כחלבון. תחילה יש לבחור רצף מקודד ו‑ORF; קומפלקסים של DNA וחלבון דורשים ספק תואם ובדיקת מדדי ביטחון.';
+        model.statusLabel = 'תהליך ביומולקולרי פתוח';
+      }
+      if (model.id === 'proteinWorkbench') {
+        model.subtitle = 'Mol* תלת־ממד · PDB · AlphaFold DB · העברה מפורשת ל‑ColabFold';
+        model.description = 'Mol* המקומי טוען מבני PDB ניסיוניים וניבויי AlphaFold DB פתוחים. אפשר לבדוק רצף חלבון מקומית ולהעבירו במפורש ל‑ColabFold; גשר localhost אופציונלי פותח את אותו מבנה ב‑UCSF ChimeraX המותקן בנפרד.';
+        model.applicability = 'ביטחון AlphaFold אינו אימות ניסויי ואינו מוכיח לבדו תפקוד, קישור או קונפורמציה ביולוגית יחידה. שליחה לענן מתבצעת רק בפעולת המשתמש.';
+        model.statusLabel = 'תהליך מבני ניתן למעקב';
       }
       return;
     }
@@ -1151,6 +1180,26 @@ export function setCatalogLocale(locale = 'en') {
         probeType: '3D-зонд', probeAxis: 'Целевая ось M-спина', fieldTension: 'Напряжение M-поля'
       };
       model.parameters.forEach((parameter) => { parameter.label = parameterLabels[parameter.key] || parameter.label; });
+    }
+    if (model.id === 'smartMatterAssembler') {
+      const parameterLabels = {
+        smartMoleculePreset:'Целевая молекула', smartMatterSeed:'Seed начальной конфигурации',
+        smartMaterialisationRate:'Скорость материализации i→3D', smartAssemblyRate:'Скорость сборки',
+        smartTargetOpacity:'Видимость целевого графа'
+      };
+      model.parameters.forEach((parameter) => { parameter.label = parameterLabels[parameter.key] || parameter.label; });
+      const preset = model.parameters.find((parameter) => parameter.key === 'smartMoleculePreset');
+      if (preset) preset.options = [['hydrogen','Водород · H₂'],['oxygen','Кислород · O₂'],['water','Вода · H₂O'],['carbonDioxide','Диоксид углерода · CO₂'],['methane','Метан · CH₄'],['ammonia','Аммиак · NH₃'],['ethanol','Этанол · C₂H₆O'],['glycine','Глицин · C₂H₅NO₂']];
+    }
+    if (model.id === 'smartMatterProteinRepair') {
+      const parameterLabels = {
+        repairProteinPreset:'Белок', photonCount:'Число гамма-фотонов', photonEnergyMeV:'Энергия фотона',
+        exposure:'Экспозиция', damageIntensity:'Интенсивность повреждения', damageSeed:'Seed повреждения',
+        showSmartMatter:'Показывать замещённые атомы'
+      };
+      model.parameters.forEach((parameter) => { parameter.label = parameterLabels[parameter.key] || parameter.label; });
+      const show = model.parameters.find((parameter) => parameter.key === 'showSmartMatter');
+      if (show) show.options = [['on','Да · светящийся контур'],['off','Нет · единая молекула']];
     }
     if (model.id === 'gravitationalStandingWaveCore') {
       const labels = ['Главный радиус тора', 'Радиус трубки тора', 'Высота тора', 'Режим волн', 'Амплитуда волны', 'Частота волны', 'Тороидальный волновой режим', 'Стабильность резонанса', 'Поляризация волны', 'Видимость сетки пространства-времени', 'Видимость фронтов волн'];
@@ -1266,6 +1315,85 @@ russianExoticCatalog.complexSpinQuasiparticle = [
   "АВТОРСКАЯ ГИПОТЕЗА"
 ];
 
+// Smart matter inherits only the M-particle's author-defined fourth-coordinate
+// displacement. It intentionally does not inherit complex-spin, polarisation,
+// or probe-deflection controls. Molecular targets are generated by RDKit.
+modelRegistry.push({
+  id: "smartMatterAssembler",
+  family: "hypothetical",
+  title: "Smart matter · molecular self-assembly",
+  subtitle: "i-coordinate materialisation · RDKit molecular graph",
+  status: "hypothetical",
+  statusLabel: "AUTHOR HYPOTHESIS + SCIENTIFIC CHEMISTRY",
+  description: "A programmable-matter hypothesis in which initially invisible particles are displaced along an additional i coordinate. Each particle crosses into visible 3D at full atomic display size, receives an element assignment, navigates to a target generated by RDKit, and forms only graph-valid bonds in a visible state-machine sequence.",
+  formula: "G=(V,E);  x₄=(x,y,z,i);  visible ⇔ i≥0;  E_target, r_target ← ETKDGv3 + MMFF94/UFF",
+  applicability: "The molecular graph, atom properties and force-field target conformer come from RDKit. Programmable particles and relocation through an i coordinate are an author-defined hypothesis. The animation is not molecular dynamics, a reaction pathway, or evidence for an extra spatial dimension.",
+  visual: "smartMatter",
+  interaction: "smartMatter",
+  parameters: [
+    { key: "smartMoleculePreset", label: "Target molecule", type: "select", value: "water", options: [["hydrogen", "Hydrogen · H₂"], ["oxygen", "Oxygen · O₂"], ["water", "Water · H₂O"], ["carbonDioxide", "Carbon dioxide · CO₂"], ["methane", "Methane · CH₄"], ["ammonia", "Ammonia · NH₃"], ["ethanol", "Ethanol · C₂H₆O"], ["glycine", "Glycine · C₂H₅NO₂"]] },
+    { key: "smartMatterSeed", label: "Initial configuration seed", min: 1, max: 99999, step: 1, value: 61453 },
+    { key: "smartMaterialisationRate", label: "i→3D materialisation rate", unit: "×", min: .35, max: 2.5, step: .05, value: 1 },
+    { key: "smartAssemblyRate", label: "Assembly rate", unit: "×", min: .35, max: 2.5, step: .05, value: 1 },
+    { key: "smartTargetOpacity", label: "Target-graph guide", min: 0, max: 1, step: .01, value: .18 }
+  ],
+  sources: [
+    ["RDKit open-source cheminformatics", "https://github.com/rdkit/rdkit"],
+    ["RDKit conformer generation and force fields", "https://www.rdkit.org/docs/RDKit_Book.html"],
+    ["Programmable matter overview · Carnegie Mellon Claytronics", "https://www.cs.cmu.edu/~claytronics/"]
+  ]
+});
+const smartMatterModel = modelRegistry.find((model) => model.id === "smartMatterAssembler");
+catalogOriginal.set(smartMatterModel.id, { title: smartMatterModel.title, subtitle: smartMatterModel.subtitle, description: smartMatterModel.description, applicability: smartMatterModel.applicability, statusLabel: smartMatterModel.statusLabel });
+russianExoticCatalog.smartMatterAssembler = [
+  "Умная материя · сборка молекул",
+  "Материализация из координаты i · молекулярный граф RDKit",
+  "Авторская модель программируемой материи: невидимые частицы изначально смещены по дополнительной координате i. При переходе в видимое 3D каждая частица появляется сразу в полном атомном размере, получает химический элемент, движется к рассчитанной RDKit позиции и последовательно образует только допустимые связи целевого графа.",
+  "Граф молекулы, свойства атомов и целевой конформер рассчитывает RDKit. Программируемые частицы и перемещение через координату i — авторская гипотеза. Анимация не является молекулярной динамикой, путём реакции или свидетельством дополнительного измерения.",
+  "АВТОРСКАЯ ГИПОТЕЗА + НАУЧНАЯ ХИМИЯ"
+];
+hebrewTitles.smartMatterAssembler = "חומר חכם · הרכבה עצמית מולקולרית";
+
+modelRegistry.push({
+  id: "smartMatterProteinRepair",
+  family: "hypothetical",
+  title: "Smart Matter · protein repair",
+  subtitle: "gamma damage · molecular ΔG · i-coordinate substitutes",
+  status: "hypothetical",
+  statusLabel: "SCIENTIFIC MVP + HYPOTHETICAL TECHNOLOGY",
+  description: "The experimental one-chain crambin structure 1CRN is converted from RCSB PDB coordinates into an RDKit molecular graph. A geometry-aware radiation-damage chamber creates explicit DamageEvent records; the repair planner computes ΔG = G₀ − Gᴅ and releases exactly one full-size Smart Matter substitute for every missing atom.",
+  formula: "G₀ → Gᴅ → Gʀ; ΔG=G₀−Gᴅ; α(SM)=clamp(1+i/δ,0,1), δ=0.35; E′γ=Eγ/[1+(Eγ/mₑc²)(1−cosθ)]",
+  applicability: "PDB coordinates, molecular topology and Compton energy transfer are established science. The first radiation model is illustrative and is not Geant4-DNA dosimetry. Smart Matter and i-coordinate relocation are author hypotheses. Graph restoration is validated; dynamic stability remains unavailable until OpenMM or GROMACS is installed.",
+  visual: "smartProteinRepair",
+  interaction: "smartProteinRepair",
+  parameters: [
+    { key:"repairProteinPreset", label:"Protein", type:"select", value:"1CRN", options:[["1CRN","Crambin · 1CRN · chain A · 46 residues"]] },
+    { key:"photonCount", label:"Gamma photon count", min:12, max:240, step:4, value:72 },
+    { key:"photonEnergyMeV", label:"Photon energy", unit:"MeV", min:.05, max:10, step:.05, value:1.25 },
+    { key:"exposure", label:"Exposure", unit:"×", min:.1, max:3, step:.05, value:1 },
+    { key:"damageIntensity", label:"Damage intensity", min:.05, max:1, step:.01, value:.55 },
+    { key:"damageSeed", label:"Damage seed", min:1, max:99999, step:1, value:1731 },
+    { key:"showSmartMatter", label:"Show Smart Matter substitutes", type:"select", value:"on", options:[["on","On · luminous contour"],["off","Off · unified molecule"]] }
+  ],
+  sources: [
+    ["RCSB PDB · crambin 1CRN", "https://www.rcsb.org/structure/1CRN"],
+    ["RDKit open-source cheminformatics", "https://github.com/rdkit/rdkit"],
+    ["Geant4-DNA · future radiation backend", "https://geant4-dna.in2p3.fr/"],
+    ["OpenMM · future molecular-dynamics validation", "https://github.com/openmm/openmm"],
+    ["UCSF ChimeraX", "https://github.com/RBVI/ChimeraX"]
+  ]
+});
+const smartMatterRepairModel = modelRegistry.find((model) => model.id === "smartMatterProteinRepair");
+catalogOriginal.set(smartMatterRepairModel.id, { title: smartMatterRepairModel.title, subtitle: smartMatterRepairModel.subtitle, description: smartMatterRepairModel.description, applicability: smartMatterRepairModel.applicability, statusLabel: smartMatterRepairModel.statusLabel });
+russianExoticCatalog.smartMatterProteinRepair = [
+  "Умная материя · починка белка",
+  "Гамма-повреждение · молекулярное ΔG · заместители из измерения i",
+  "Экспериментальная одноцепочечная структура крамбина 1CRN из RCSB превращается в молекулярный граф RDKit. Камера повреждения создаёт явные события DamageEvent, анализатор вычисляет ΔG = G₀ − Gᴅ и выпускает ровно по одной полноразмерной частице умной материи на каждый утраченный атом.",
+  "PDB-координаты, химический граф и кинематика комптоновской передачи энергии — научная часть. Модель повреждения пока иллюстративная, не Geant4-DNA. Умная материя и переход через i — авторская гипотеза. Граф восстанавливается и проверяется; динамическая устойчивость потребует OpenMM или GROMACS.",
+  "НАУЧНЫЙ MVP + АВТОРСКАЯ ГИПОТЕЗА"
+];
+hebrewTitles.smartMatterProteinRepair = "חומר חכם · תיקון חלבון";
+
 // Author-defined gravitational standing-wave core.  The representation is
 // intentionally educational: it is not a numerical-relativity calculation.
 modelRegistry.push({
@@ -1316,49 +1444,35 @@ russianExoticCatalog.gravitationalStandingWaveCore = [
 modelRegistry.push({
   id: "resonantTripleBlackHole",
   family: "hypothetical",
-  title: "Periodic six-black-hole balancing field (hypothesis)",
-  subtitle: "Project hypothesis · symmetric coplanar balancing pair",
+  title: "M-particle gravitational orchestrator",
+  subtitle: "Project hypothesis · local spin-2 field control · 2–8 black holes",
   status: "hypothetical",
   statusLabel: "PROJECT HYPOTHESIS",
-  description: "The central black-hole pair is evolved from its instantaneous positions and velocities with a softened force model plus a small 1PN-inspired correction and continuous radiation-reaction proxy. Four equal-mass external balancing bodies are present from the initial state and follow smooth, coplanar controller trajectories. Their gravitational tidal field can change the binary trajectory without directly placing or stopping either central horizon.",
-  formula: "d²rᵢ/dt² = −G Σⱼ≠ᵢ mⱼ(rᵢ−rⱼ)/|rᵢ−rⱼ|³;  hᵢⱼ ∝ (2G/c⁴D) d²Qᵢⱼ/dt²",
-  applicability: "Long-lived multi-black-hole evolution with radiation reaction requires numerical relativity and is generally chaotic. This is an internally consistent educational force model: only the outer quartet is controlled, while the central pair responds to calculated forces. It is not numerical-relativity output, evidence for a stable astrophysical solution, or a prediction.",
-  visual: "resonantTriple",
+  description: "All black holes evolve from forces and initial momenta. An algorithm switches local, oriented M-field channels to the author's spin-2 mode when a close encounter is predicted. Under the explicitly hypothesised screening law, attraction weakens and existing angular momentum produces a tangential fly-by. No black-hole trajectory is prescribed by the controller.",
+  formula: "Fᵢⱼ = (1 − κuᵢⱼ)Gmᵢmⱼrᵢⱼ/(r²+ε²)³ᐟ²;  uᵢⱼ ∈ [0,1];  ΔE = W_M − E_diss",
+  applicability: "Spin-2 screening is an author-defined interaction, not a consequence established by general relativity. This is a Newtonian numerical experiment with a labelled dissipation proxy, explicit M-field energy exchange and finite-window checks. Exact radial impacts cannot be deflected tangentially by screening alone. The grid and wave signal are qualitative; no numerical-relativity solver is claimed.",
+  visual: "mOrchestrator",
   interaction: "gravity",
-  parameters: [
-    { key: "centralMassA", label: "Central mass A", unit: "M☉", min: 5, max: 60, step: .5, value: 30 },
-    { key: "centralMassB", label: "Central mass B", unit: "M☉", min: 5, max: 60, step: .5, value: 28 },
-    { key: "tertiaryMass", label: "Balancing-body mass (each)", unit: "M☉", min: 2, max: 20, step: .5, value: 7 },
-    { key: "centralSeparation", label: "Central-pair scale", unit: "r_g (visual)", min: 10, max: 34, step: .5, value: 22 },
-    { key: "outerTrajectory", label: "Outer trajectory", type: "select", value: "rosette", options: [["rosette", "Rosette precession"], ["libration", "Co-orbital libration"], ["horseshoe", "Horseshoe-like passage"]] },
-    { key: "outerModulation", label: "Trajectory modulation", min: 0, max: 1, step: .01, value: .68 },
-    { key: "curvatureDepth", label: "Embedding depth", min: .5, max: 3.5, step: .01, value: 2.2 },
-    { key: "gridOpacity", label: "Spacetime-grid visibility", min: .03, max: .65, step: .01, value: .24 },
-    { key: "waveOpacity", label: "Wavefront visibility", min: 0, max: 1, step: .01, value: .82 }
-  ],
+  parameters: [],
   sources: [
-    ["Einstein Toolkit — open numerical-relativity infrastructure", "https://einsteintoolkit.org/"],
-    ["Blanchet, Gravitational Radiation from Post-Newtonian Sources", "https://arxiv.org/abs/1310.1528"],
-    ["Three-body dynamics in numerical relativity — review context", "https://arxiv.org/abs/1307.6237"]
+    ["M-field hypothesis — law, units and tests", "../docs/m-orchestrator.md"],
+    ["Einstein Toolkit — reference context, not this model's engine", "https://www.einsteintoolkit.org/gallery/bbh/index.html"],
+    ["Blanchet, Gravitational Radiation from Post-Newtonian Sources — reference", "https://arxiv.org/abs/1310.1528"]
   ]
 });
 const resonantTripleModel = modelRegistry.find((model) => model.id === "resonantTripleBlackHole");
+// The constructor owns initial conditions; legacy outer-balancer controls
+// cannot act on this model. Only M-field occupation is controlled at run time.
 catalogOriginal.set(resonantTripleModel.id, { title: resonantTripleModel.title, subtitle: resonantTripleModel.subtitle, description: resonantTripleModel.description, applicability: resonantTripleModel.applicability, statusLabel: resonantTripleModel.statusLabel });
-russianExoticCatalog.resonantTripleBlackHole = [
-  "Управляемый пролёт четырёх чёрных дыр (гипотеза)",
-  "Авторская гипотеза · симметричная копланарная балансирующая пара",
-  "Две центральные чёрные дыры начинают с той же барицентрической квазикеплеровской спирали и качественного квадрупольного волнового рисунка, что и в лаборатории двойного слияния. Симметричная пара равномассивных внешних чёрных дыр добавляется на заданной копланарной траектории; её приливный импульс, зависящий от расстояния и фазы, иллюстрирует, как близкий многотельный пролёт может перевести центральную пару в разлёт.",
-  "Для четырёх чёрных дыр с излучением требуется численная ОТО, а динамика обычно хаотична. Здесь используется управляемый симметричный пролёт: это учебная гипотеза, а не доказательство устойчивой конфигурации, предотвращающей слияние."
-];
 
-// Keep this late override separate from the legacy catalogue text so all three
-// user-facing fields describe the ready-to-run balancing quartet.
 russianExoticCatalog.resonantTripleBlackHole = [
-  "Периодическая балансирующая система шести чёрных дыр (гипотеза)",
-  "Авторская гипотеза · автоматическая копланарная четвёрка",
-  "Две центральные чёрные дыры эволюционируют из текущих положений и скоростей под действием рассчитанных сил, слабой 1PN-подобной поправки и непрерывной модели радиационной реакции. Четыре внешних балансировщика присутствуют с начала опыта и меняют только собственные гладкие копланарные траектории; их приливное поле может изменить путь центральной пары, не перемещая и не останавливая её напрямую.",
-  "Длительная многотельная эволюция чёрных дыр с излучением требует численной ОТО и обычно хаотична. Это внутренне согласованная учебная силовая модель: управляется только внешняя четвёрка, а центральная пара отвечает на вычисленные силы. Она не является результатом численной ОТО, доказательством устойчивой системы или предсказанием."
+  'Гравитационный аркестратор на основе M частиц',
+  'Авторская гипотеза · локальное переключение спина · конструктор 2–8 чёрных дыр',
+  'Все чёрные дыры движутся под действием рассчитанных сил. Алгоритм прогнозирует опасные сближения и переключает локально направленные каналы M-поля в режим спина 2. По заданному закону гипотезы притяжение ослабевает, а уже имеющийся угловой момент приводит к пролёту по касательной. Управление меняет только M-поле.',
+  'Ослабление гравитации при спине 2 — авторский постулат, а не установленное следствие ОТО. Здесь используется численное ньютоновское приближение, условная диссипация и явный учёт обмена энергией с M-полем. При строго лобовом движении такое экранирование само по себе не создаёт боковой импульс. Проверки относятся к заданным начальным условиям и конечному интервалу времени.',
+  'АВТОРСКАЯ ГИПОТЕЗА'
 ];
+hebrewTitles.resonantTripleBlackHole = 'מתזמר כבידה המבוסס על חלקיקי M';
 
 // Keep the late Russian override aligned with the current torus implementation.
 russianExoticCatalog.gravitationalStandingWaveCore = [
@@ -1412,13 +1526,13 @@ russianExoticCatalog.tesseract4d = [
 modelRegistry.push({
   id: "quantumChemistryLab",
   family: "chemistry",
-  title: "Квантовая химия · молекулярная структура",
-  subtitle: "RDKit 3D-конформер + PySCF HF/DFT",
+  title: "Молекулярный конструктор · квантовая химия",
+  subtitle: "Свободный редактор · RDKit 3D/реакции · PySCF HF/DFT",
   status: "computational",
   statusLabel: "НАУЧНЫЙ РАСЧЁТ",
-  description: "RDKit строит детерминированный трёхмерный конформер и оптимизирует его классическим силовым полем MMFF94. Затем PySCF независимо рассчитывает электронную структуру методом Hartree–Fock или DFT.",
+  description: "Свободный редактор создаёт молекулярный граф из атомов и связей либо принимает SMILES. RDKit строит детерминированные 3D-конформеры, смеси и сбалансированные конечные состояния реакций; доступный через WSL PySCF отдельно рассчитывает электронную структуру методом Hartree–Fock или DFT.",
   formula: "H_e Ψ = E Ψ;  E_DFT[ρ] = T_s[ρ] + V_ext[ρ] + J[ρ] + E_xc[ρ]",
-  applicability: "Это настоящий локальный расчёт изолированной молекулы в приближении Борна–Оппенгеймера. Точность зависит от геометрии, базиса и функционала; MMFF-геометрия не заменяет квантовую оптимизацию геометрии.",
+  applicability: "Редактор и реакционные шаблоны используют реальные функции RDKit, но анимация реакции соединяет только сбалансированные графы реагентов и продуктов: это не переходное состояние и не молекулярная динамика. Электронный HF/DFT-расчёт является отдельным этапом и доступен только при работающем PySCF-бэкенде.",
   visual: "molecule",
   interaction: "quantumChemistry",
   parameters: [
@@ -1426,7 +1540,7 @@ modelRegistry.push({
     { key: "quantumMethod", label: "Электронный метод", type: "select", value: "RHF", options: [["RHF", "RHF · Hartree–Fock"], ["PBE", "DFT · PBE"], ["B3LYP", "DFT · B3LYP"]] },
     { key: "basisSet", label: "Базис", type: "select", value: "sto-3g", options: [["sto-3g", "STO-3G · быстрый"], ["6-31g", "6-31G"], ["def2-svp", "def2-SVP · точнее"]] }
   ],
-  sources: [["PySCF open-source quantum chemistry", "https://pyscf.org/"], ["RDKit open-source cheminformatics", "https://www.rdkit.org/"], ["ASE Atomic Simulation Environment", "https://ase-lib.org/"]]
+  sources: [["PySCF open-source quantum chemistry", "https://pyscf.org/"], ["RDKit open-source cheminformatics", "https://www.rdkit.org/"], ["RDKit reaction and conformer documentation", "https://www.rdkit.org/docs/RDKit_Book.html"], ["ASE Atomic Simulation Environment", "https://ase-lib.org/"]]
 });
 
 modelRegistry.push({
@@ -1453,16 +1567,79 @@ modelRegistry.push({
   sources: [["DEVSIM open-source TCAD", "https://github.com/devsim/devsim"], ["DEVSIM diode example", "https://devsim.net/examples_diode.html"]]
 });
 
-for (const id of ["quantumChemistryLab", "semiconductorDeviceLab"]) {
+modelRegistry.push({
+  id: "dnaWorkbench",
+  family: "biomolecule",
+  title: "DNA structure and translation workbench",
+  subtitle: "Mol* 3D · six reading frames · ORF to protein",
+  status: "computational",
+  statusLabel: "OPEN BIOMOLECULAR WORKFLOW",
+  description: "An embedded Mol* workspace opens experimental nucleic-acid structures from the Protein Data Bank. The local backend normalises FASTA, computes the reverse complement, translates all six reading frames and identifies candidate open reading frames before any protein-folding request is prepared.",
+  formula: "DNA 5′→3′; codon → amino acid (NCBI translation table 1)",
+  applicability: "DNA does not fold with AlphaFold as a protein. A DNA coding sequence must first be translated into a selected ORF. DNA–protein or DNA–ligand complex prediction requires a provider that explicitly supports nucleic-acid complexes and must be interpreted with confidence metrics and experimental evidence.",
+  visual: "biomolecule",
+  biomoleculeKind: "dna",
+  interaction: "biomolecule",
+  parameters: [],
+  sources: [
+    ["Mol* molecular viewer (MIT)", "https://github.com/molstar/molstar"],
+    ["RCSB Protein Data Bank", "https://www.rcsb.org/"],
+    ["NCBI genetic codes", "https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi"],
+    ["UCSF ChimeraX", "https://github.com/RBVI/ChimeraX"]
+  ]
+});
+
+modelRegistry.push({
+  id: "proteinWorkbench",
+  family: "biomolecule",
+  title: "Protein structure and AlphaFold workbench",
+  subtitle: "Mol* 3D · PDB · AlphaFold DB · ColabFold handoff",
+  status: "computational",
+  statusLabel: "TRACEABLE STRUCTURE WORKFLOW",
+  description: "A locally bundled Mol* viewer loads experimental PDB structures and openly available AlphaFold DB predictions. Protein sequences can be checked locally and handed to an explicit ColabFold cloud workflow; an optional localhost REST bridge can open the same structure in a separately installed UCSF ChimeraX application.",
+  formula: "sequence → MSA/templates → structure ensemble + pLDDT/PAE",
+  applicability: "AlphaFold confidence is not experimental validation and does not by itself establish function, binding, conformational dynamics or a unique biological state. Matter Frontier Lab never labels a database lookup or an illustrative structure as a new prediction. Cloud submission remains an explicit user action.",
+  visual: "biomolecule",
+  biomoleculeKind: "protein",
+  interaction: "biomolecule",
+  parameters: [],
+  sources: [
+    ["Mol* molecular viewer (MIT)", "https://github.com/molstar/molstar"],
+    ["AlphaFold Protein Structure Database", "https://alphafold.ebi.ac.uk/"],
+    ["ColabFold open source", "https://github.com/sokrypton/ColabFold"],
+    ["UCSF ChimeraX AlphaFold workflow", "https://www.cgl.ucsf.edu/chimerax/docs/user/commands/alphafold.html"]
+  ]
+});
+
+for (const id of ["quantumChemistryLab", "semiconductorDeviceLab", "dnaWorkbench", "proteinWorkbench"]) {
   const model = modelRegistry.find((item) => item.id === id);
   catalogOriginal.set(id, { title: model.title, subtitle: model.subtitle, description: model.description, applicability: model.applicability, statusLabel: model.statusLabel });
 }
-hebrewTitles.quantumChemistryLab = "כימיה קוונטית · מבנה מולקולרי";
+hebrewTitles.quantumChemistryLab = "עורך מולקולות · כימיה קוונטית";
 hebrewTitles.semiconductorDeviceLab = "התקן מוליך למחצה · צומת p–n";
+hebrewTitles.dnaWorkbench = "מעבדת מבנה ותרגום DNA";
+hebrewTitles.proteinWorkbench = "מעבדת חלבונים ו‑AlphaFold";
 hebrewFamilyTitles.chemistry = "כימיה קוונטית";
 hebrewFamilyTitles.semiconductor = "מוליכים למחצה";
+hebrewFamilyTitles.biomolecule = "ביומולקולות";
+
+russianExoticCatalog.dnaWorkbench = [
+  "ДНК · структура и трансляция",
+  "Mol* 3D · шесть рамок считывания · ORF→белок",
+  "Встроенный Mol* открывает экспериментальные структуры нуклеиновых кислот из Protein Data Bank. Локальный бэкенд нормализует FASTA, строит обратный комплемент, переводит все шесть рамок считывания и находит кандидаты ORF до формирования запроса на укладку белка.",
+  "ДНК нельзя подавать в AlphaFold как белок. Сначала выбирается кодирующая последовательность и ORF; комплексы ДНК–белок требуют отдельного совместимого провайдера и проверки метрик уверенности.",
+  "ОТКРЫТЫЙ БИОМОЛЕКУЛЯРНЫЙ WORKFLOW"
+];
+russianExoticCatalog.proteinWorkbench = [
+  "Белки · PDB и AlphaFold",
+  "Mol* 3D · AlphaFold DB · явная передача в ColabFold",
+  "Локально закреплённый Mol* загружает экспериментальные PDB-структуры и открытые предсказания AlphaFold DB. Белковую последовательность можно проверить локально и явно передать в облачный ColabFold; необязательный localhost-мост открывает ту же структуру в отдельно установленном UCSF ChimeraX.",
+  "Уверенность AlphaFold не равна экспериментальному подтверждению и сама по себе не устанавливает функцию, связывание или единственную биологическую конформацию. Облачная отправка выполняется только пользователем.",
+  "ПРОВЕРЯЕМЫЙ WORKFLOW СТРУКТУР"
+];
 
 export const families = [
+  ["biomolecule", "Биомолекулы"],
   ["chemistry", "Квантовая химия"],
   ["semiconductor", "Полупроводники"],
   ["exotic", "Exotic matter"],

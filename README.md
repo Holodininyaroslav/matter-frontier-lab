@@ -405,3 +405,24 @@ The words *hypothesis*, *theoretical*, and *catalogue-only* in the interface are
 ## License
 
 Unless an individual file or imported asset specifies otherwise, the original code in this repository is released under the MIT License. Third-party software, papers, data and visual assets retain their own licences and attribution requirements; see [NOTICE.md](NOTICE.md).
+
+## Latest laboratory interface — September 2026
+
+The [browser laboratory](https://holodininyaroslav.github.io/matter-frontier-lab/matter-lab/)
+now includes DNA and protein structure viewing with bundled Mol*, schematic /
+molecular representations, public PDB presets, and the Smart Matter hypothesis
+cards. The M-particle gravitational orchestrator includes a 2–8-body editor and
+cyclic close-passage presets tested for 2, 3 and 4 bodies.
+
+[Sequential Smart Matter assembly](docs/smart-matter-assembly.md) begins with
+only a molecular wireframe. Each particle crosses i→0 at full size, takes its
+place and forms valid bonds before the next particle begins. Eight precomputed
+RDKit targets run directly on Pages, with pause, reset and speed controls.
+
+Protein repair demonstrates a side gamma-photon stream, atom loss and full-size
+substitutes becoming visible through a hypothetical i-coordinate transition.
+GitHub Pages uses a precomputed public 1CRN / RDKit reference plan, not a live
+Python backend. Local installations support new RDKit / biomolecule calculations;
+GPU tools, external scientific packages and ChimeraX require the local backend.
+M-field screening, i-coordinate matter and the damage animation are explicitly
+hypothetical / illustrative, not numerical relativity or Geant4-DNA transport.

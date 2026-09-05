@@ -13,3 +13,5 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install pytest numpy scipy onnx onnxruntime
       - run: python -m pytest tests/test_local_security.py tests/test_discovery_chain_http.py
+      - run: python -m pytest tests/test_chimerax_security.py tests/test_biomolecule_adapter.py
+      - run: node --test tests/test_m_orchestrator.mjs tests/test_gamma_repair.mjs tests/test_smart_assembly.mjs

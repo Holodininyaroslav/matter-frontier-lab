@@ -2,7 +2,10 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { USDZLoader } from "three/addons/loaders/USDZLoader.js";
-import { modelRegistry, families, setCatalogLocale } from "./models.js?v=20260903-cloud-grover";
+import { modelRegistry, families, setCatalogLocale } from "./models.js?v=20260905-public2";
+import { createMOrchestrator } from "./m-orchestrator-view.js?v=20260905-public2";
+import { repairFrame } from "./gamma-repair-timeline.mjs?v=20260905-public2";
+import { createAssembly, startAssembly, advanceAssembly, assemblyFrame } from "./smart-assembly.mjs?v=20260905-sequential1";
 import { solveModel, formatMetric } from "./solver.js?v=20260722e";
 
 const $ = (selector) => document.querySelector(selector);
@@ -68,7 +71,11 @@ const state = {
   resonantTripleActivationAngle: 0,
   resonantTripleManualControl: false,
   resonantTripleManualAngle: 0,
-  resonantTripleManualRadius: 1
+  resonantTripleManualRadius: 1,
+  chemistry: null,
+  smartMatter: null,
+  smartProteinRepair: null,
+  biomolecule: null
 };
 setCatalogLocale(localStorage.getItem("qcd-neutrino-language") || "en");
 window.qcdLabState = state;
@@ -171,6 +178,21 @@ let primaryParticles = [];
 let fieldObjects = [];
 let mesonVisual = null;
 let colliderVisual = null;
+const mOrchestrator = createMOrchestrator({
+  THREE, specimen, canvas, camera, controls,
+  createBlackHole: createRelativisticBlackHole,
+  createGrid: createSpacetimeGrid,
+  isPaused: () => state.paused,
+  unpause: () => { if (state.paused) $("#pauseBtn").click(); },
+  status: setStatus,
+  refresh: () => { renderInspector(); rebuildSpecimen(); runLocalSolver(); },
+  onResult: (result) => {
+    state.solverResult = result;
+    $("#chartSubtitle").textContent = result.primaryLabel;
+    $("#telemetrySolver").textContent = "M-field · local integrator";
+    renderMetrics(); drawChart();
+  }
+});
 const BARYON_PARTNERS = { proton: "antiproton", antiproton: "proton", neutron: "antineutron", antineutron: "neutron", hyperon: "antihyperon", antihyperon: "hyperon" };
 const BARYON_BEAMS = {
   proton: ["p · proton", ["u", "u", "d"]], antiproton: ["p̄ · antiproton", ["uBar", "uBar", "dBar"]],
@@ -618,6 +640,11 @@ function applyParameterDrivenVisuals() {
     const slice = tesseractSliceSegments();
     const intersection = slice.segments.length ? `${slice.segments.length} boundary segments` : "no intersection — outside visible space";
     $("#sceneScale").textContent = `${mode} · hidden ${slice.projection.hidden} ∈ [${slice.min.toFixed(2)}, ${slice.max.toFixed(2)}] · ${intersection}`;
+  } else if (state.selected.visual === "smartMatter") {
+    const smart = ensureSmartMatterState();
+    $("#sceneScale").textContent = smart?.plan
+      ? `${smart.plan.formula} · RDKit ${smart.plan.rdkit} · visible only at i ≥ 0 · ${smart.stage}`
+      : "programmable matter hypothesis · particles hidden at i < 0";
   } else if (state.selected.visual === "hybridMatter") {
     $("#sceneScale").textContent = `quark fraction ${(visual.quarkFraction * 100).toFixed(0)}% · packing ${visual.specimenScale.toFixed(2)}×`;
   } else if (state.selected.visual === "meson") {
@@ -1459,32 +1486,576 @@ const moleculePresets = {
   benzene: { atoms: Array.from({length:6},(_,i)=>["C",Math.cos(i*Math.PI/3)*1.45,Math.sin(i*Math.PI/3)*1.45,0]).concat(Array.from({length:6},(_,i)=>["H",Math.cos(i*Math.PI/3)*2.35,Math.sin(i*Math.PI/3)*2.35,0])), bonds: Array.from({length:6},(_,i)=>[i,(i+1)%6]).concat(Array.from({length:6},(_,i)=>[i,i+6])) }
 };
 
-function createMoleculeLab() {
-  const solved = state.solverResult?.kind === "quantum-chemistry" ? state.solverResult.state : null;
-  const fallback = moleculePresets[state.values.moleculePreset] || (state.values.moleculePreset === "caffeine" ? moleculePresets.benzene : moleculePresets.water);
-  const atoms = solved?.atoms?.map((atom) => [atom.element, atom.x, atom.y, atom.z]) || fallback.atoms;
-  const bonds = solved?.bonds?.map((bond) => [bond[0], bond[1]]) || fallback.bonds;
-  const materials = {
-    H: new THREE.MeshPhysicalMaterial({ color:0xf0f6f7, roughness:.24 }),
-    C: new THREE.MeshPhysicalMaterial({ color:0x34434c, roughness:.28, metalness:.08 }),
-    N: new THREE.MeshPhysicalMaterial({ color:0x397be8, emissive:0x0c2458, emissiveIntensity:.35 }),
-    O: new THREE.MeshPhysicalMaterial({ color:0xef5168, emissive:0x5a0814, emissiveIntensity:.32 })
+const chemistryLibrary = {
+  water: ["Вода", "H₂O", "O"], ammonia: ["Аммиак", "NH₃", "N"], methane: ["Метан", "CH₄", "C"],
+  ethanol: ["Этанол", "C₂H₆O", "CCO"], benzene: ["Бензол", "C₆H₆", "c1ccccc1"], caffeine: ["Кофеин", "C₈H₁₀N₄O₂", "Cn1c(=O)c2c(ncn2C)n(C)c1=O"],
+  hydrogen: ["Водород", "H₂", "[H][H]"], oxygen: ["Кислород", "O₂", "O=O"], carbonDioxide: ["Диоксид углерода", "CO₂", "O=C=O"],
+  ethene: ["Этен", "C₂H₄", "C=C"], ethane: ["Этан", "C₂H₆", "CC"], hydrogenChloride: ["Хлороводород", "HCl", "Cl"],
+  aceticAcid: ["Уксусная кислота", "C₂H₄O₂", "CC(=O)O"], ethylAcetate: ["Этилацетат", "C₄H₈O₂", "CCOC(=O)C"]
+};
+
+const chemistryReactionOptions = [
+  ["waterFormation", "2 H₂ + O₂ → 2 H₂O"],
+  ["methaneCombustion", "CH₄ + 2 O₂ → CO₂ + 2 H₂O"],
+  ["etheneHydrogenation", "C₂H₄ + H₂ → C₂H₆"],
+  ["esterification", "C₂H₆O + C₂H₄O₂ ⇌ C₄H₈O₂ + H₂O"]
+];
+
+function chemistryDraftFromPreset(preset) {
+  const source = moleculePresets[preset] || moleculePresets.water;
+  return {
+    atoms: source.atoms.map((atom) => ({ element: atom[0], x: 140 + atom[1] * 34, y: 82 - atom[2] * 34 })),
+    bonds: source.bonds.map((bond, index) => [bond[0], bond[1], preset === "benzene" && index < 6 && index % 2 === 0 ? 2 : 1])
   };
-  const centre = atoms.reduce((sum, atom) => sum.add(new THREE.Vector3(atom[1], atom[2], atom[3])), new THREE.Vector3()).multiplyScalar(1 / atoms.length);
-  const scale = atoms.length > 8 ? 1.15 : 1.55;
-  const points = atoms.map((atom) => new THREE.Vector3(atom[1], atom[2], atom[3]).sub(centre).multiplyScalar(scale));
-  bonds.forEach(([a,b]) => {
-    const link = tubeBetween(points[a], points[b], new THREE.MeshPhysicalMaterial({ color:0x8bb6bf, transparent:true, opacity:.78, roughness:.25 }), .085);
-    specimen.add(link); fieldObjects.push(link);
+}
+
+function ensureChemistryState(force = false) {
+  if (state.selected?.visual !== "molecule") return null;
+  const preset = state.values.moleculePreset || "water";
+  if (force || !state.chemistry || state.chemistry.preset !== preset) {
+    state.chemistry = {
+      preset,
+      atomTool: "C",
+      bondOrder: 1,
+      selectedAtom: null,
+      draft: chemistryDraftFromPreset(preset),
+      smilesInput: chemistryLibrary[preset]?.[2] || "O",
+      original: null,
+      display: null,
+      addedCompounds: [],
+      libraryChoice: "oxygen",
+      reactionChoice: "waterFormation",
+      reaction: null,
+      busy: false,
+      message: "Редактор готов · выберите атом и кликните по полю"
+    };
+  }
+  return state.chemistry;
+}
+
+function chemistryElementMaterial(element) {
+  const palette = {
+    H: [0xf0f6f7, 0x000000], C: [0x34434c, 0x000000], N: [0x397be8, 0x0c2458], O: [0xef5168, 0x5a0814],
+    F: [0x65dca3, 0x083b28], P: [0xf3a44f, 0x5a2606], S: [0xf0d75a, 0x594600], Cl: [0x4ed47b, 0x07351a],
+    Br: [0x9e4434, 0x391008], I: [0x8050a8, 0x251037], B: [0xf2a7a0, 0x4b1714]
+  };
+  const [color, emissive] = palette[element] || [0x8ca0a6, 0x102025];
+  return new THREE.MeshPhysicalMaterial({ color, emissive, emissiveIntensity: .28, roughness: .25, metalness: .04 });
+}
+
+function chemistryAtomRadius(element) {
+  return ({ H:.27, C:.46, N:.49, O:.49, F:.45, P:.58, S:.58, Cl:.58, Br:.62, I:.67, B:.5 })[element] || .48;
+}
+
+function ensureSmartMatterState(force = false) {
+  if (state.selected?.visual !== "smartMatter") return null;
+  const preset = state.values.smartMoleculePreset || "water";
+  const seed = Number(state.values.smartMatterSeed || 61453);
+  if (force || !state.smartMatter || state.smartMatter.preset !== preset || state.smartMatter.seed !== seed) {
+    state.smartMatter = {
+      preset, seed, plan:null, busy:false, running:false, startedAt:0,
+      stage:"READY", visibleAtoms:0, bondedAtoms:0, formedBonds:0,
+      message:"RDKit target graph is ready to be calculated"
+    };
+  }
+  return state.smartMatter;
+}
+
+async function prepareSmartMatterPlan(startAfter = false) {
+  const smart = ensureSmartMatterState();
+  if (!smart || smart.busy) return;
+  smart.busy = true;
+  smart.running = false;
+  smart.stage = "CALCULATING";
+  smart.message = "RDKit: ETKDGv3 conformer and molecular graph…";
+  renderInspector();
+  setStatus("SMART MATTER · RDKit target calculation", true);
+  try {
+    const pagesDemo=location.hostname.endsWith('.github.io');
+    const response = pagesDemo ? await fetch(`./assets/smart-matter/${encodeURIComponent(smart.preset)}.json`) : await fetch("./api/solve", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ model:"smartMatterAssembler", values:{
+        chemistryAction:"smart-matter-plan",
+        smartMoleculePreset:state.values.smartMoleculePreset,
+        smartMatterSeed:state.values.smartMatterSeed
+      }})
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Smart-matter backend error");
+    smart.plan = payload.result.state;
+    smart.precomputed = pagesDemo;
+    smart.sequence = createAssembly(smart.plan.particles);
+    smart.visibleAtoms = smart.bondedAtoms = smart.formedBonds = 0;
+    smart.stage = "READY";
+    smart.message = `${smart.plan.formula} · ${smart.plan.forceField} · graph ${smart.plan.checks.valid ? "PASS" : "FAIL"}`;
+    state.solverResult = payload.result;
+    state.solverMs = payload.elapsed_ms;
+    rebuildSpecimen();
+    renderMetrics();
+    drawChart();
+    if (startAfter) startSmartMatterAssembly();
+    else setStatus(`SMART MATTER · ${smart.message}`, false);
+  } catch (error) {
+    smart.stage = "ERROR";
+    smart.message = `Ошибка: ${error.message}`;
+    setStatus(`SMART MATTER · ${error.message}`, false);
+  } finally {
+    smart.busy = false;
+    renderInspector();
+  }
+}
+
+function startSmartMatterAssembly() {
+  const smart = ensureSmartMatterState();
+  if (!smart?.plan) { void prepareSmartMatterPlan(true); return; }
+  if (!smart.plan.checks?.valid) {
+    smart.message = "Сборка заблокирована: целевой граф не прошёл проверки";
+    renderInspector();
+    return;
+  }
+  smart.running = true;
+  smart.sequence = createAssembly(smart.plan.particles);
+  startAssembly(smart.sequence);
+  smart.startedAt = clock.elapsedTime;
+  smart.stage = "MATERIALIZING";
+  smart.visibleAtoms = 0;
+  smart.bondedAtoms = 0;
+  smart.formedBonds = 0;
+  state.interaction = "smartMatterAssembly";
+  state.interactionTime = 0;
+  rebuildSpecimen();
+  renderInspector();
+  setStatus(`i < 0 · ${smart.plan.particles.length} smart-matter particles are outside visible 3D`, true);
+}
+
+function ensureSmartProteinRepairState(force = false) {
+  if (state.selected?.visual !== "smartProteinRepair") return null;
+  const signature = [state.values.repairProteinPreset, state.values.photonCount, state.values.photonEnergyMeV,
+    state.values.exposure, state.values.damageIntensity, state.values.damageSeed].join("|");
+  if (force || !state.smartProteinRepair || state.smartProteinRepair.signature !== signature) {
+    state.smartProteinRepair = {
+      signature, plan:null, busy:false, running:false, startedAt:0, stage:"ORIGINAL",
+      visibleParticles:0, placedParticles:0, restoredBonds:0,
+      message:"RCSB/RDKit reference graph is ready to be calculated"
+    };
+  }
+  return state.smartProteinRepair;
+}
+
+async function prepareSmartProteinRepairPlan() {
+  const repair = ensureSmartProteinRepairState();
+  if (!repair || repair.busy) return;
+  repair.busy = true;
+  repair.running = false;
+  repair.message = "RCSB 1CRN → RDKit molecular graph → damage and repair plan…";
+  renderInspector();
+  setStatus("PROTEIN REPAIR · calculating G₀, Gᴅ and Gʀ", true);
+  try {
+    const pagesDemo = location.hostname.endsWith('.github.io');
+    const response = pagesDemo ? await fetch('./assets/pdb/protein-repair-demo.json') : await fetch("./api/solve", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ model:"smartMatterProteinRepair", values:{
+        biomoleculeAction:"smart-matter-protein-repair",
+        pdbId:state.values.repairProteinPreset,
+        photonCount:state.values.photonCount,
+        photonEnergyMeV:state.values.photonEnergyMeV,
+        exposure:state.values.exposure,
+        damageIntensity:state.values.damageIntensity,
+        damageSeed:state.values.damageSeed
+      }})
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Protein-repair backend error");
+    repair.plan = payload.result.state;
+    repair.precomputed = pagesDemo;
+    repair.stage = "ORIGINAL";
+    repair.message = `${repair.plan.reference.pdbId} · ${repair.plan.reference.atoms.length} atoms · G₀ ready`;
+    state.solverResult = payload.result;
+    state.solverMs = payload.elapsed_ms;
+    rebuildSpecimen();
+    renderMetrics();
+    drawChart();
+    setStatus(`PROTEIN REPAIR · ${repair.message}`, false);
+  } catch (error) {
+    repair.stage = "ERROR";
+    repair.message = `Ошибка: ${error.message}`;
+    setStatus(`PROTEIN REPAIR · ${error.message}`, false);
+  } finally {
+    repair.busy = false;
+    renderInspector();
+  }
+}
+
+function irradiateSmartProtein() {
+  const repair = ensureSmartProteinRepairState();
+  if (!repair?.plan) { void prepareSmartProteinRepairPlan(); return; }
+  repair.running = true;
+  repair.stage = "IRRADIATING";
+  repair.startedAt = clock.elapsedTime;
+  repair.visibleParticles = repair.placedParticles = repair.restoredBonds = 0;
+  state.view = "damageGraph";
+  repair.message = `${repair.plan.damageEvents.length} DamageEvent · ${repair.plan.damageReport.atomsMissing} atoms missing · ${repair.plan.damageReport.brokenBonds} bonds broken`;
+  rebuildSpecimen();
+  renderInspector();
+  setStatus(`GAMMA DAMAGE · ${repair.message}`, false);
+}
+
+function releaseProteinRepairMatter() {
+  const repair = ensureSmartProteinRepairState();
+  if (!repair?.plan) { void prepareSmartProteinRepairPlan(); return; }
+  if (repair.stage === "ORIGINAL") { irradiateSmartProtein(); return; }
+  repair.running = true;
+  repair.stage = "REPAIRING";
+  state.view = "damageGraph";
+  repair.startedAt = clock.elapsedTime;
+  repair.visibleParticles = repair.placedParticles = repair.restoredBonds = 0;
+  repair.message = `${repair.plan.repairPlan.requiredSmartMatterParticles} particles hidden at i < 0`;
+  rebuildSpecimen();
+  renderInspector();
+  setStatus(`SMART MATTER RELEASE · ${repair.message}`, true);
+}
+
+function setProteinGraphState(stage) {
+  const repair = ensureSmartProteinRepairState();
+  if (!repair?.plan || !["ORIGINAL", "DAMAGED", "REPAIRED"].includes(stage)) return;
+  repair.running = false;
+  repair.stage = stage;
+  state.view = stage === "DAMAGED" ? "damageGraph" : stage === "REPAIRED" ? "repairedGraph" : "structure";
+  repair.message = stage === "ORIGINAL" ? "G₀ · experimental PDB reference"
+    : stage === "DAMAGED" ? "Gᴅ · explicit damaged molecular graph"
+    : "Gʀ · graph restored with Smart Matter substitutes";
+  rebuildSpecimen();
+  renderInspector();
+}
+
+function chemistryMapAtoms(fromAtoms, toAtoms) {
+  const remaining = new Map();
+  toAtoms.forEach((atom, index) => {
+    if (!remaining.has(atom.element)) remaining.set(atom.element, []);
+    remaining.get(atom.element).push(index);
   });
+  const fromTo = fromAtoms.map((atom) => remaining.get(atom.element)?.shift());
+  if (fromTo.some((index) => index === undefined)) return null;
+  const toFrom = Array(toAtoms.length).fill(-1);
+  fromTo.forEach((target, source) => { toFrom[target] = source; });
+  return { fromTo, toFrom };
+}
+
+function addChemicalBond(points, a, b, order, material, radius, target) {
+  const count = Math.max(1, Math.min(3, Math.round(Number(order || 1))));
+  const direction = points[b].clone().sub(points[a]).normalize();
+  const side = new THREE.Vector3(0, 1, 0).cross(direction);
+  if (side.lengthSq() < .01) side.set(1, 0, 0);
+  side.normalize();
+  const bonds = [];
+  for (let lane = 0; lane < count; lane += 1) {
+    const shift = side.clone().multiplyScalar((lane - (count - 1) / 2) * .16);
+    const link = tubeBetween(points[a].clone().add(shift), points[b].clone().add(shift), material, radius);
+    specimen.add(link); fieldObjects.push(link); bonds.push({ object: link, a, b, shift });
+  }
+  if (target) target.push(...bonds);
+  return bonds;
+}
+
+function createMoleculeLab() {
+  const chemistry = ensureChemistryState();
+  const reaction = chemistry?.reaction;
+  const solved = ["quantum-chemistry", "chemistry-structure", "chemistry-mixture"].includes(state.solverResult?.kind) ? state.solverResult.state : null;
+  const fallback = moleculePresets[state.values.moleculePreset] || (state.values.moleculePreset === "caffeine" ? moleculePresets.benzene : moleculePresets.water);
+  if (reaction?.reactants?.atoms?.length) {
+    const fromAtoms = reaction.reactants.atoms;
+    const toAtoms = reaction.products.atoms;
+    const mapping = chemistryMapAtoms(fromAtoms, toAtoms);
+    if (!mapping) { chemistry.message = "Шаблон не сбалансирован по атомам"; return; }
+    const centreFrom = fromAtoms.reduce((sum, atom) => sum.add(new THREE.Vector3(atom.x, atom.y, atom.z)), new THREE.Vector3()).multiplyScalar(1 / fromAtoms.length);
+    const centreTo = toAtoms.reduce((sum, atom) => sum.add(new THREE.Vector3(atom.x, atom.y, atom.z)), new THREE.Vector3()).multiplyScalar(1 / toAtoms.length);
+    const scale = fromAtoms.length > 18 ? .72 : fromAtoms.length > 10 ? .9 : 1.14;
+    const fromPoints = fromAtoms.map((atom) => new THREE.Vector3(atom.x, atom.y, atom.z).sub(centreFrom).multiplyScalar(scale));
+    const toPoints = fromAtoms.map((_, index) => {
+      const atom = toAtoms[mapping.fromTo[index]];
+      return new THREE.Vector3(atom.x, atom.y, atom.z).sub(centreTo).multiplyScalar(scale);
+    });
+    const atomMeshes = fromAtoms.map((atom, index) => {
+      const sphere = makeSphere(chemistryAtomRadius(atom.element), chemistryElementMaterial(atom.element), fromPoints[index].toArray(), 28);
+      tagComponent(sphere, "chemicalAtom", { element:atom.element, atomIndex:index + 1 });
+      specimen.add(sphere); primaryParticles.push(sphere); return sphere;
+    });
+    const reactantMaterial = new THREE.MeshPhysicalMaterial({ color:0x8bdce6, transparent:true, opacity:.82, roughness:.25 });
+    const productMaterial = new THREE.MeshPhysicalMaterial({ color:0xf3c862, transparent:true, opacity:0, roughness:.25 });
+    const reactantBonds = [];
+    reaction.reactants.bonds.forEach(([a,b,order]) => addChemicalBond(fromPoints, a, b, order, reactantMaterial, .065, reactantBonds));
+    const productBonds = [];
+    reaction.products.bonds.forEach(([a,b,order]) => addChemicalBond(toPoints, mapping.toFrom[a], mapping.toFrom[b], order, productMaterial, .07, productBonds));
+    animated.push({ type:"chemistryReaction", atomMeshes, fromPoints, toPoints, reactantBonds, productBonds,
+                    reactantMaterial, productMaterial, startedAt:reaction.startedAt, running:reaction.running, chemistry });
+    createShell(Math.max(5.2, 3.5 + fromAtoms.length * .09), 3);
+    return;
+  }
+  const display = chemistry?.display || solved;
+  const atoms = display?.atoms?.map((atom) => [atom.element, atom.x, atom.y, atom.z]) || fallback.atoms;
+  const bonds = display?.bonds?.map((bond) => [bond[0], bond[1], bond[2] || 1]) || fallback.bonds.map((bond) => [bond[0], bond[1], 1]);
+  const centre = atoms.reduce((sum, atom) => sum.add(new THREE.Vector3(atom[1], atom[2], atom[3])), new THREE.Vector3()).multiplyScalar(1 / atoms.length);
+  const scale = atoms.length > 24 ? .72 : atoms.length > 12 ? .92 : atoms.length > 8 ? 1.15 : 1.55;
+  const points = atoms.map((atom) => new THREE.Vector3(atom[1], atom[2], atom[3]).sub(centre).multiplyScalar(scale));
+  const bondMaterial = new THREE.MeshPhysicalMaterial({ color:0x8bb6bf, transparent:true, opacity:.78, roughness:.25 });
+  bonds.forEach(([a,b,order]) => addChemicalBond(points, a, b, order, bondMaterial, .07));
   atoms.forEach((atom, index) => {
-    const radius = atom[0] === "H" ? .28 : atom[0] === "C" ? .46 : .5;
-    const sphere = makeSphere(radius, materials[atom[0]] || mats.neutron, points[index].toArray(), 32);
+    const sphere = makeSphere(chemistryAtomRadius(atom[0]), chemistryElementMaterial(atom[0]), points[index].toArray(), 28);
     tagComponent(sphere, "chemicalAtom", { element:atom[0], atomIndex:index + 1 });
     specimen.add(sphere); primaryParticles.push(sphere);
     animated.push({ type:"jitter", object:sphere, base:points[index].clone(), phase:index*.71, speed:.18 });
   });
   createShell(Math.max(3.5, 2.5 + atoms.length * .12), 3);
+}
+
+function createSmartMatterLab() {
+  const smart = ensureSmartMatterState();
+  const boundary = new THREE.Group();
+  const slice = new THREE.Mesh(
+    new THREE.SphereGeometry(7.1, 34, 22),
+    new THREE.MeshBasicMaterial({ color:0x38d8ea, transparent:true, opacity:.035, wireframe:true, depthWrite:false })
+  );
+  const iAxis = new THREE.ArrowHelper(new THREE.Vector3(0,1,0), new THREE.Vector3(-6.3,-3.1,-5.1), 2.25, 0xee72d5, .28, .16);
+  boundary.add(slice, iAxis);
+  specimen.add(boundary);
+  fieldObjects.push(slice, iAxis);
+  if (!smart?.plan?.particles?.length) {
+    const marker = new THREE.Mesh(
+      new THREE.TorusGeometry(2.2, .035, 8, 96),
+      new THREE.MeshBasicMaterial({ color:0x66e9f5, transparent:true, opacity:.32 })
+    );
+    marker.rotation.x = Math.PI / 2;
+    specimen.add(marker);
+    animated.push({ type:"ring", object:marker, phase:0, speed:.12 });
+    setStatus(smart?.busy ? "RDKIT · calculating target graph" : "SMART MATTER · calculate a target graph to begin", Boolean(smart?.busy));
+    return;
+  }
+
+  const plan = smart.plan;
+  const targetScale = plan.particles.length > 18 ? .82 : plan.particles.length > 10 ? 1.08 : 1.55;
+  const startScale = plan.particles.length > 18 ? .72 : .84;
+  const targetPoints = plan.particles.map((particle) => new THREE.Vector3(
+    particle.targetPosition.x, particle.targetPosition.y, particle.targetPosition.z
+  ).multiplyScalar(targetScale));
+  const startPoints = plan.particles.map((particle) => new THREE.Vector3(
+    particle.position.x, particle.position.y, particle.position.z
+  ).multiplyScalar(startScale));
+
+  const guide = new THREE.Group();
+  guide.userData.ownsVisibility = true;
+  const guideOpacity = Number(state.values.smartTargetOpacity ?? .18);
+  const guideMaterial = new THREE.MeshBasicMaterial({ color:0x4bd9e9, transparent:true, opacity:guideOpacity, wireframe:true, depthWrite:false });
+  targetPoints.forEach((point, index) => {
+    const atom = plan.particles[index];
+    const ghost = new THREE.Mesh(new THREE.SphereGeometry(chemistryAtomRadius(atom.assignedElement) * .92, 14, 10), guideMaterial);
+    ghost.position.copy(point);
+    guide.add(ghost);
+  });
+  plan.constructionOrder.forEach(([a,b]) => {
+    const link = tubeBetween(targetPoints[a], targetPoints[b], guideMaterial, .018);
+    guide.add(link);
+  });
+  specimen.add(guide);
+  fieldObjects.push(guide);
+
+  const neutralMaterial = new THREE.MeshPhysicalMaterial({ color:0x8ba8ae, emissive:0x163c43, emissiveIntensity:.42, roughness:.28, metalness:.08, transparent:true, opacity:.96 });
+  const atomMeshes = plan.particles.map((particle, index) => {
+    const material = neutralMaterial.clone();
+    const targetMaterial = chemistryElementMaterial(particle.assignedElement);
+    const mesh = makeSphere(chemistryAtomRadius(particle.assignedElement), material, startPoints[index].toArray(), 28);
+    mesh.visible = false;
+    mesh.userData.iPosition = particle.position.i;
+    mesh.userData.ownsVisibility = true;
+    mesh.userData.smartState = "FREE";
+    tagComponent(mesh, "smartMatterParticle", {
+      smartMatterId:particle.id, targetAtom:index + 1, assignedElement:particle.assignedElement,
+      effectiveMass:particle.effectiveMass, formalCharge:particle.formalCharge,
+      valence:particle.valence, capacity:particle.capacity, initialI:particle.position.i
+    });
+    specimen.add(mesh);
+    primaryParticles.push(mesh);
+    const path = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([startPoints[index], targetPoints[index]]),
+      new THREE.LineDashedMaterial({ color:0x74cad4, transparent:true, opacity:.2, dashSize:.16, gapSize:.13, depthWrite:false })
+    );
+    path.computeLineDistances();
+    path.visible = false;
+    specimen.add(path);
+    return { mesh, material, targetMaterial, neutralColor:material.color.clone(), path };
+  });
+
+  const bondMaterial = new THREE.MeshPhysicalMaterial({ color:0xcceef1, transparent:true, opacity:.88, roughness:.24 });
+  const bonds = [];
+  plan.constructionOrder.forEach(([a,b,order]) => {
+    const entries = [];
+    const count = Math.max(1, Math.min(3, Math.round(Number(order || 1))));
+    const direction = targetPoints[b].clone().sub(targetPoints[a]).normalize();
+    const side = new THREE.Vector3(0,1,0).cross(direction);
+    if (side.lengthSq() < .01) side.set(1,0,0);
+    side.normalize();
+    for (let lane=0; lane<count; lane+=1) {
+      const shift = side.clone().multiplyScalar((lane - (count - 1) / 2) * .16);
+      const link = tubeBetween(targetPoints[a].clone().add(shift), targetPoints[b].clone().add(shift), bondMaterial.clone(), .065);
+      link.visible = false;
+      link.userData.ownsVisibility = true;
+      specimen.add(link);
+      fieldObjects.push(link);
+      entries.push(link);
+    }
+    bonds.push({ a, b, order, entries });
+  });
+  const assembly = { type:"smartMatterAssembly", smart, atomMeshes, bonds, startPoints, targetPoints, guide };
+  smart.sequence ||= createAssembly(plan.particles);
+  animated.push(assembly);
+  renderSmartAssembly(assembly);
+  setStatus(smart.running ? `i < 0 · ${plan.particles.length} particles hidden outside visible 3D` : `RDKit TARGET · ${plan.formula} · ${plan.forceField}`, smart.running);
+}
+
+function createSmartProteinRepairLab() {
+  const repair = ensureSmartProteinRepairState();
+  const chamber = new THREE.Mesh(
+    new THREE.SphereGeometry(7.5, 32, 20),
+    new THREE.MeshBasicMaterial({ color:0x3fd9eb, transparent:true, opacity:.025, wireframe:true, depthWrite:false })
+  );
+  specimen.add(chamber);
+  fieldObjects.push(chamber);
+  if (!repair?.plan?.reference?.atoms?.length) {
+    const rings = new THREE.Group();
+    for (let index=0; index<4; index+=1) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(2.4 + index*.72, .025, 6, 96), new THREE.MeshBasicMaterial({ color:0x59dbe8, transparent:true, opacity:.18 }));
+      ring.rotation.x = Math.PI/2;
+      rings.add(ring);
+    }
+    specimen.add(rings);
+    animated.push({ type:"ring", object:rings, phase:0, speed:.08 });
+    return;
+  }
+  const plan = repair.plan;
+  const referenceAtoms = plan.reference.atoms;
+  const centre = referenceAtoms.reduce((sum, atom) => sum.add(new THREE.Vector3(atom.x, atom.y, atom.z)), new THREE.Vector3()).multiplyScalar(1/referenceAtoms.length);
+  const extents = referenceAtoms.reduce((max, atom) => Math.max(max, new THREE.Vector3(atom.x, atom.y, atom.z).distanceTo(centre)), 1);
+  const proteinScale = Math.min(.48, 5.7/extents);
+  const pointFor = (atom) => new THREE.Vector3(atom.x, atom.y, atom.z).sub(centre).multiplyScalar(proteinScale);
+  const referencePoints = referenceAtoms.map(pointFor);
+  const graph = ["ORIGINAL","IRRADIATING"].includes(repair.stage) ? { atoms:plan.reference.atoms, bonds:plan.reference.bonds }
+    : repair.stage === "REPAIRED" ? plan.repaired : plan.damaged;
+  const atomById = new Map(graph.atoms.map((atom) => [Number(atom.id), atom]));
+  const atomMeshes = new Map();
+  graph.atoms.forEach((atom) => {
+    const point = pointFor(atom);
+    const present = atom.present !== false;
+    if (!present) {
+      const ghost = new THREE.Mesh(
+        new THREE.SphereGeometry(Math.max(.1, chemistryAtomRadius(atom.element)*.38), 10, 8),
+        new THREE.MeshBasicMaterial({ color:0xff4f78, transparent:true, opacity:.42, wireframe:true, depthWrite:false })
+      );
+      ghost.position.copy(referencePoints[Number(atom.id)]);
+      ghost.userData.missingAtom = Number(atom.id);
+      specimen.add(ghost);
+      atomMeshes.set(Number(atom.id), ghost);
+      return;
+    }
+    const material = chemistryElementMaterial(atom.element);
+    if (atom.damaged) {
+      material.emissive.setHex(0x8d1738);
+      material.emissiveIntensity = .9;
+    }
+    const mesh = makeSphere(Math.max(.1, chemistryAtomRadius(atom.element)*.38), material, point.toArray(), 12);
+    tagComponent(mesh, "proteinAtom", { atomId:Number(atom.id), element:atom.element, atomName:atom.atomName, residue:`${atom.residueName} ${atom.residueNumber}`, chain:atom.chain, damaged:Boolean(atom.damaged), smartMatter:Boolean(atom.smartMatter) });
+    specimen.add(mesh);
+    primaryParticles.push(mesh);
+    atomMeshes.set(Number(atom.id), mesh);
+    if (repair.stage === "REPAIRED" && atom.smartMatter && state.values.showSmartMatter !== "off") {
+      const halo = new THREE.Mesh(
+        new THREE.SphereGeometry(Math.max(.15, chemistryAtomRadius(atom.element)*.53), 12, 8),
+        new THREE.MeshBasicMaterial({ color:0xee72d5, transparent:true, opacity:.32, wireframe:true, depthWrite:false })
+      );
+      halo.position.copy(point);
+      specimen.add(halo);
+      animated.push({ type:"pulse", object:halo, phase:Number(atom.id)*.31, speed:1.4 });
+    }
+  });
+  const brokenLines = [];
+  const allProteinLines = [];
+  graph.bonds.forEach((bond) => {
+    const a = atomById.get(Number(bond.a));
+    const b = atomById.get(Number(bond.b));
+    if (!a || !b) return;
+    const broken = Boolean(bond.broken || a.present === false || b.present === false);
+    const material = broken
+      ? new THREE.LineDashedMaterial({ color:0xff4f78, transparent:true, opacity:.72, dashSize:.09, gapSize:.08, depthWrite:false })
+      : new THREE.LineBasicMaterial({ color:0xb8d9df, transparent:true, opacity:.5, depthWrite:false });
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([referencePoints[Number(bond.a)], referencePoints[Number(bond.b)]]), material);
+    if (broken) line.computeLineDistances();
+    specimen.add(line);
+    allProteinLines.push({line,a:Number(bond.a),b:Number(bond.b)});
+    fieldObjects.push(line);
+    if (broken) brokenLines.push(line);
+  });
+  if (repair.stage === "DAMAGED" || repair.stage === "REPAIRING") {
+    plan.damageEvents.forEach((event, index) => {
+      const atomId = Number(event.affectedAtomIds?.[0]);
+      const marker = new THREE.Mesh(
+        new THREE.TorusGeometry(.2 + (index%3)*.025, .018, 6, 30),
+        new THREE.MeshBasicMaterial({ color:0xff5b7e, transparent:true, opacity:.78, depthWrite:false })
+      );
+      marker.position.copy(referencePoints[atomId]);
+      marker.lookAt(camera.position);
+      specimen.add(marker);
+      animated.push({ type:"pulse", object:marker, phase:index*.37, speed:1.2 });
+    });
+  }
+  if (repair.stage === "REPAIRING") {
+    const particleEntries = plan.repairPlan.particles.map((particle, index) => {
+      const target = referencePoints[Number(particle.targetAtom)].clone();
+      const start = new THREE.Vector3(particle.position.x, particle.position.y, particle.position.z).sub(centre).multiplyScalar(proteinScale);
+      const material = chemistryElementMaterial(particle.assignedElement);
+      material.emissive.setHex(0xa31589);
+      material.emissiveIntensity = .95;
+      const mesh = makeSphere(Math.max(.1, chemistryAtomRadius(particle.assignedElement)*.38), material, start.toArray(), 12);
+      mesh.visible = false;
+      mesh.userData.iPosition = particle.position.i;
+      tagComponent(mesh, "smartMatterProteinSubstitute", { smartMatterId:particle.id, targetAtom:particle.targetAtom, element:particle.assignedElement, residue:`${particle.residue.name} ${particle.residue.number}`, initialI:particle.position.i });
+      specimen.add(mesh);
+      primaryParticles.push(mesh);
+      const path = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([start, target]),
+        new THREE.LineDashedMaterial({ color:0xee72d5, transparent:true, opacity:.25, dashSize:.12, gapSize:.1, depthWrite:false })
+      );
+      path.computeLineDistances();
+      path.visible = false;
+      specimen.add(path);
+      return { mesh, path, start, target, particle, ghost:atomMeshes.get(Number(particle.targetAtom)) };
+    });
+    animated.push({ type:"smartProteinRepair", repair, entries:particleEntries, brokenLines, finished:false });
+  }
+  if (repair.stage === "IRRADIATING") {
+    const entries = plan.repairPlan.particles.map((particle,index) => {
+      const target=referencePoints[Number(particle.targetAtom)].clone();
+      const material=chemistryElementMaterial(particle.assignedElement);
+      material.transparent=true;material.opacity=0;material.emissive.setHex(0x892778);
+      const replacement=makeSphere(Math.max(.1,chemistryAtomRadius(particle.assignedElement)*.38),material,target.toArray(),12);
+      replacement.visible=false;specimen.add(replacement);
+      const photon=makeSphere(.07,new THREE.MeshBasicMaterial({color:0xffe79a}),[-12,target.y,target.z],8);
+      specimen.add(photon);
+      const beam=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-12,target.y,target.z),target]),new THREE.LineBasicMaterial({color:0xffcb6a,transparent:true,opacity:.22}));
+      specimen.add(beam);
+      return {particle,target,replacement,photon,beam,original:atomMeshes.get(Number(particle.targetAtom))};
+    });
+    // Non-absorbed photons form a visible side stream. These are context
+    // markers, not an additional radiation-transport calculation.
+    const stream=Array.from({length:Math.min(240,Number(state.values.photonCount)||72)},(_,j)=>{
+      const photon=makeSphere(.045,new THREE.MeshBasicMaterial({color:0xffe79a}),[-12,Math.sin(j*2.399)*5,Math.cos(j*1.713)*5],6);
+      specimen.add(photon);return {photon,start:j*.025};
+    });
+    animated.push({type:'gammaProteinRepair',repair,entries,stream,lines:allProteinLines,finished:false});
+  }
+  const label = repair.stage === "ORIGINAL" ? "G₀ · RCSB experimental structure"
+    : repair.stage === "IRRADIATING" ? "γ → impact → i→3D · continuous repair"
+    : repair.stage === "DAMAGED" ? "Gᴅ · radiation-damage graph"
+    : repair.stage === "REPAIRING" ? "i→3D · Smart Matter repair"
+    : "Gʀ · restored molecular graph";
+  setStatus(`PROTEIN REPAIR · ${label}`, repair.stage === "REPAIRING");
 }
 
 function createSemiconductorLab() {
@@ -1756,19 +2327,23 @@ function rebuildSpecimen() {
   else if (model.visual === "polytope4d") createTesseract();
   else if (model.id === "blackHole" && state.view === "blackHoleMerger") createBlackHoleMerger();
   else if (model.visual === "resonantTriple") createResonantTripleHypothesis();
+  else if (model.visual === "mOrchestrator") mOrchestrator.build();
   else if (model.visual === "macro") createMacroObject(model);
   else if (model.visual === "denseBaryons") createDenseBaryons();
   else if (model.visual === "hybridMatter") createHybridMatter(model);
   else if (model.visual === "condensateMatter") createCondensateMatter(model);
   else if (model.visual === "crystalMatter") createCrystalMatter(model);
   else if (model.visual === "molecule") createMoleculeLab();
+  else if (model.visual === "smartMatter") createSmartMatterLab();
+  else if (model.visual === "smartProteinRepair") createSmartProteinRepairLab();
   else if (model.visual === "semiconductor") createSemiconductorLab();
+  else if (model.visual === "biomolecule") { /* Mol* owns the central biomolecular canvas. */ }
   else if (model.visual === "multiquark") createMultiquark(model);
   else if (model.visual === "meson") createMeson(model);
   else if (model.visual === "collider") createCollider(model);
   else if (["quarkFluid", "strangeMatter", "pairedMatter", "strangelet"].includes(model.visual)) createQuarkMedium(model);
   else if (model.visual === "neutrinoLens") createNeutrinoLens();
-  const cleanMacroStage = model.visual === "macro" || model.visual === "resonantTriple";
+  const cleanMacroStage = model.visual === "mOrchestrator" || model.visual === "macro" || model.visual === "resonantTriple" || model.visual === "biomolecule" || model.visual === "smartMatter" || model.visual === "smartProteinRepair";
   const colliderMode = model.visual === "collider" || Boolean(state.collisionContext && isBaryonModel(model));
   platform.visible = !colliderMode && !cleanMacroStage;
   platformRing.visible = !colliderMode && !cleanMacroStage;
@@ -1803,13 +2378,19 @@ function beamLabel(id) {
 
 function renderCatalog() {
   const filters = $("#familyFilters");
+  const filterLocale = localStorage.getItem("qcd-neutrino-language") || "en";
+  const filterLabels = ({
+    en:{ hypothetical:"My hypotheses", biomolecule:"Biomolecules", chemistry:"Quantum chemistry", semiconductor:"Semiconductors", baryon:"Baryons", lepton:"Leptons", nuclear:"Nuclei and atoms", all:"All", dense:"Dense", quark:"QGP", meson:"Mesons", collider:"Collider", strange:"Strange", exotic:"Exotic matter", macro:"Macro objects", ordinary:"Ordinary" },
+    ru:{ hypothetical:"Мои гипотезы", biomolecule:"Биомолекулы", chemistry:"Квантовая химия", semiconductor:"Полупроводники", baryon:"Барионы", lepton:"Лептоны", nuclear:"Ядра и атомы", all:"Все", dense:"Плотная", quark:"QGP", meson:"Мезоны", collider:"Коллайдер", strange:"Странная", exotic:"Экзотическая материя", macro:"Макрообъекты", ordinary:"Обычная" },
+    he:{ hypothetical:"ההשערות שלי", biomolecule:"ביומולקולות", chemistry:"כימיה קוונטית", semiconductor:"מוליכים למחצה", baryon:"בריונים", lepton:"לפטונים", nuclear:"גרעינים ואטומים", all:"הכול", dense:"חומר צפוף", quark:"פלזמת QGP", meson:"מזונים", collider:"מאיץ", strange:"חומר מוזר", exotic:"חומר אקזוטי", macro:"עצמים מאקרוסקופיים", ordinary:"חומר רגיל" }
+  })[filterLocale] || {};
   const baseFamilies = families.filter(([id]) => !["ordinary", "exotic", "macro"].includes(id));
   const macroFamily = families.find(([id]) => id === "macro");
-  const ordinaryFamilies = [["baryon", "Барионы"], ["lepton", "Лептоны"], ["nuclear", "Ядра и атомы"]];
+  const ordinaryFamilies = [["baryon", "Baryons"], ["lepton", "Leptons"], ["nuclear", "Nuclei and atoms"]];
   const hypotheticalFamily = baseFamilies.find(([id]) => id === "hypothetical");
   const remainingBaseFamilies = baseFamilies.filter(([id]) => id !== "hypothetical");
   const orderedFamilies = [hypotheticalFamily, ...remainingBaseFamilies.slice(0, 1), ...ordinaryFamilies, ...remainingBaseFamilies.slice(1), families.find(([id]) => id === "exotic"), macroFamily].filter(Boolean);
-  filters.innerHTML = orderedFamilies.map(([id, label]) => `<button type="button" class="${state.family === id ? "active" : ""}" data-family="${id}">${label}</button>`).join("");
+  filters.innerHTML = orderedFamilies.map(([id, label]) => `<button type="button" class="${state.family === id ? "active" : ""}" data-family="${id}">${filterLabels[id] || label}</button>`).join("");
   const query = state.search.trim().toLowerCase();
   const familyMatches = (model) => {
     if (state.family === "all") return true;
@@ -1819,9 +2400,8 @@ function renderCatalog() {
   };
   const visible = modelRegistry.filter((model) => familyMatches(model) && (!query || `${model.title} ${model.subtitle} ${model.description}`.toLowerCase().includes(query)));
   $("#modelCount").textContent = String(visible.length).padStart(2, "0");
-  const familyLabels = (localStorage.getItem("qcd-neutrino-language") || "en") === "ru"
-    ? { baryon: "БАРИОН", lepton: "ЛЕПТОН", nuclear: "ЯДРО", ordinary: "ОБЫЧНАЯ", exotic: "ЭКЗОТИЧЕСКАЯ" }
-    : { baryon: "BARYON", lepton: "LEPTON", nuclear: "NUCLEUS", ordinary: "ORDINARY", exotic: "EXOTIC" };
+  const locale = localStorage.getItem("qcd-neutrino-language") || "en";
+  const familyLabels = Object.fromEntries(Object.entries(filterLabels).map(([key, value]) => [key, String(value).toLocaleUpperCase(locale)]));
   $("#modelList").innerHTML = visible.map((model) => `
     <button type="button" class="model-item ${state.selected.id === model.id ? "active" : ""}" data-model="${model.id}" data-status="${model.status}">
       <span class="model-dot" aria-hidden="true"></span>
@@ -1875,8 +2455,647 @@ function quantumGpuPanel(model) {
   </section>`;
 }
 
+const biomoleculeDefaults = {
+  dna: {
+    sequenceType: "dna",
+    sequence: "GGGATGGCTGCTGCTGAAGTTGACGACGCTGCTGCTGAACTGGTTGACGCTGCTTAAACC",
+    pdbId: "1BNA",
+    accession: "P69905",
+    title: "B-DNA dodecamer · PDB 1BNA"
+  },
+  protein: {
+    sequenceType: "protein",
+    sequence: "TTCCPSIVARSNFNVCRLPGTPEAICATYTGCIIIPGATCPGDYAN",
+    pdbId: "1CRN",
+    accession: "P69905",
+    title: "Crambin · PDB 1CRN"
+  }
+};
+
+const biomoleculeCopy = {
+  en: {
+    kicker:"BIOMOLECULAR STRUCTURE WORKBENCH", sequence:"Sequence and translation", sequenceType:"Sequence type",
+    dna:"DNA", protein:"Protein", analyse:"Analyse sequence", useOrf:"Use selected ORF as protein", frame:"Reading frame",
+    minOrf:"Minimum ORF length", noOrf:"No candidate ORF has been calculated yet.", proteinReady:"Protein supplied to prediction provider",
+    sources:"3D structure sources", pdb:"PDB identifier", loadPdb:"Load PDB", afdb:"AlphaFold DB accession", lookup:"Lookup and load",
+    localFile:"Open local PDB/mmCIF", prediction:"Protein folding providers", cloud:"Open ColabFold cloud", local:"Local ColabFold",
+    unavailable:"not installed", available:"available", chimerax:"Open current structure in ChimeraX", refresh:"Refresh providers",
+    boundary:"Cloud execution is never automatic: the protein sequence is copied and the official notebook is opened for an explicit submission.",
+    ready:"Mol* is ready. Select a source or analyse a sequence.", reset:"Reset example", schematic:"Schematic", molecular:"Molecular"
+  },
+  ru: {
+    kicker:"БИОМОЛЕКУЛЯРНАЯ ЛАБОРАТОРИЯ СТРУКТУР", sequence:"Последовательность и трансляция", sequenceType:"Тип последовательности",
+    dna:"ДНК", protein:"Белок", analyse:"Анализировать", useOrf:"Взять выбранный ORF как белок", frame:"Рамка считывания",
+    minOrf:"Минимальная длина ORF", noOrf:"Кандидаты ORF ещё не рассчитаны.", proteinReady:"Белок для провайдера предсказания",
+    sources:"Источники 3D-структуры", pdb:"Идентификатор PDB", loadPdb:"Загрузить PDB", afdb:"Акцессия AlphaFold DB", lookup:"Найти и загрузить",
+    localFile:"Открыть локальный PDB/mmCIF", prediction:"Провайдеры укладки белка", cloud:"Открыть ColabFold cloud", local:"Локальный ColabFold",
+    unavailable:"не установлен", available:"доступен", chimerax:"Открыть текущую структуру в ChimeraX", refresh:"Обновить провайдеры",
+    boundary:"Облачный расчёт не запускается автоматически: последовательность копируется, а официальный notebook открывается для явной отправки пользователем.",
+    ready:"Mol* готов. Выберите источник структуры или проанализируйте последовательность.", reset:"Вернуть пример", schematic:"Схематическая", molecular:"Молекулярная"
+  },
+  he: {
+    kicker:"סביבת עבודה למבנים ביומולקולריים", sequence:"רצף ותרגום", sequenceType:"סוג רצף",
+    dna:"DNA", protein:"חלבון", analyse:"ניתוח רצף", useOrf:"שימוש ב‑ORF שנבחר כחלבון", frame:"מסגרת קריאה",
+    minOrf:"אורך ORF מזערי", noOrf:"טרם חושבו מועמדי ORF.", proteinReady:"חלבון לספק החיזוי",
+    sources:"מקורות למבנה תלת־ממדי", pdb:"מזהה PDB", loadPdb:"טעינת PDB", afdb:"מזהה AlphaFold DB", lookup:"איתור וטעינה",
+    localFile:"פתיחת PDB/mmCIF מקומי", prediction:"ספקי קיפול חלבון", cloud:"פתיחת ColabFold בענן", local:"ColabFold מקומי",
+    unavailable:"לא מותקן", available:"זמין", chimerax:"פתיחת המבנה הנוכחי ב‑ChimeraX", refresh:"רענון ספקים",
+    boundary:"חישוב בענן אינו אוטומטי: הרצף מועתק והמחברת הרשמית נפתחת לשליחה מפורשת בידי המשתמש.",
+    ready:"Mol* מוכן. בחרו מקור מבני או נתחו רצף.", reset:"שחזור דוגמה", schematic:"סכמטית", molecular:"מולקולרית"
+  }
+};
+
+let molstarViewer = null;
+let molstarViewerPromise = null;
+const biomoleculeRepresentationModes = new Map();
+
+function biomoleculeLocale() { return localStorage.getItem("qcd-neutrino-language") || "en"; }
+function bioT(key) { return biomoleculeCopy[biomoleculeLocale()]?.[key] || biomoleculeCopy.en[key] || key; }
+
+function ensureBiomoleculeState(model = state.selected, force = false) {
+  const kind = model?.biomoleculeKind || "protein";
+  if (force || !state.biomolecule || state.biomolecule.modelId !== model.id) {
+    const preset = biomoleculeDefaults[kind];
+    state.biomolecule = {
+      modelId:model.id, kind, sequenceType:preset.sequenceType, sequence:preset.sequence,
+      proteinSequence:kind === "protein" ? preset.sequence : "", readingFrame:1, minimumOrfLength:8,
+      pdbId:preset.pdbId, accession:preset.accession, orfs:[], selectedOrf:"", alphaFoldEntry:null,
+      providerStatus:state.backendStatusPayload?.scientific?.biomolecule || null, busy:false,
+      message:bioT("ready"), currentStructureUrl:"", currentStructureTitle:"", loadedKey:"",
+      representationMode:biomoleculeRepresentationModes.get(model.id) || "schematic", representationBusy:false
+    };
+  }
+  return state.biomolecule;
+}
+
+async function biomoleculeBackendAction(values) {
+  const response = await fetch("./api/solve", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({ model:state.selected.id, values })
+  });
+  const payload = await response.json();
+  if (!response.ok || !payload.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+  return payload.result;
+}
+
+async function initMolstarViewer() {
+  if (molstarViewer) return molstarViewer;
+  if (molstarViewerPromise) return molstarViewerPromise;
+  const fallback = $("#biomoleculeViewerFallback");
+  fallback.hidden = false;
+  if (!window.molstar?.Viewer) throw new Error("The local Mol* bundle did not initialise");
+  molstarViewerPromise = window.molstar.Viewer.create($("#molstarViewer"), {
+    layoutIsExpanded:false,
+    layoutShowControls:false,
+    layoutShowRemoteState:false,
+    layoutShowSequence:true,
+    layoutShowLog:false,
+    layoutShowLeftPanel:false,
+    viewportBackgroundColor:"#030a0f",
+    viewportShowExpand:false,
+    viewportShowSelectionMode:true,
+    viewportShowAnimation:true,
+    pdbProvider:"rcsb",
+    emdbProvider:"rcsb"
+  }).then((viewer) => {
+    viewer.plugin.canvas3d?.setProps({ renderer:{ backgroundColor:0x030a0f } });
+    molstarViewer = viewer;
+    fallback.hidden = true;
+    return viewer;
+  }).catch((error) => {
+    molstarViewerPromise = null;
+    fallback.querySelector("strong").textContent = "Mol* could not start";
+    fallback.querySelector("span").textContent = error.message;
+    throw error;
+  });
+  return molstarViewerPromise;
+}
+
+function syncBiomoleculeRepresentationButtons() {
+  const bio = state.selected?.visual === "biomolecule" ? ensureBiomoleculeState() : null;
+  const schematic = $("#bioSchematicViewBtn");
+  const molecular = $("#bioMolecularViewBtn");
+  if (!bio || !schematic || !molecular) return;
+  schematic.querySelector("span").textContent = bioT("schematic");
+  molecular.querySelector("span").textContent = bioT("molecular");
+  for (const [button, mode] of [[schematic, "schematic"], [molecular, "molecular"]]) {
+    const active = bio.representationMode === mode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+    button.disabled = bio.representationBusy;
+  }
+  schematic.onclick = () => { void applyBiomoleculeRepresentation("schematic"); };
+  molecular.onclick = () => { void applyBiomoleculeRepresentation("molecular"); };
+}
+
+async function applyBiomoleculeRepresentation(mode, { announce = true } = {}) {
+  if (!["schematic", "molecular"].includes(mode)) return;
+  const bio = ensureBiomoleculeState();
+  bio.representationMode = mode;
+  biomoleculeRepresentationModes.set(bio.modelId, mode);
+  const viewer = await initMolstarViewer();
+  const structures = viewer.plugin.managers.structure.hierarchy.current.structures;
+  if (!structures.length) { syncBiomoleculeRepresentationButtons(); return; }
+  const presetId = mode === "molecular"
+    ? "preset-structure-representation-atomic-detail"
+    : "preset-structure-representation-polymer-cartoon";
+  const provider = viewer.plugin.builders.structure.representation.getPresets().find((candidate) => candidate.id === presetId);
+  if (!provider) throw new Error(`Mol* representation preset is unavailable: ${presetId}`);
+  bio.representationBusy = true;
+  syncBiomoleculeRepresentationButtons();
+  try {
+    viewer.plugin.canvas3d?.setProps({ camera:{ manualReset:true } });
+    await viewer.plugin.managers.structure.component.applyPreset(structures, provider);
+    await viewer.plugin.managers.camera.reset();
+    if (announce) setStatus(`MOL* · ${bioT(mode)}`, true);
+  } catch (error) {
+    bio.message = `Mol* representation: ${error.message}`;
+    setStatus(bio.message, false);
+  } finally {
+    bio.representationBusy = false;
+    syncBiomoleculeRepresentationButtons();
+  }
+}
+
+async function loadBiomoleculeStructure(url, format, title, { binary = false, key = url, local = false } = {}) {
+  const bio = ensureBiomoleculeState();
+  bio.busy = true;
+  bio.message = `Mol* · ${title}`;
+  renderInspector();
+  try {
+    const viewer = await initMolstarViewer();
+    await viewer.plugin.clear();
+    await viewer.loadStructureFromUrl(url, format, binary, { label:title });
+    await applyBiomoleculeRepresentation(bio.representationMode, { announce:false });
+    bio.loadedKey = key;
+    bio.currentStructureUrl = local ? "" : url;
+    bio.currentStructureTitle = title;
+    $("#biomoleculeViewerTitle").textContent = title;
+    $("#biomoleculeViewerMeta").textContent = format.toUpperCase() + (binary ? " · binary" : " · interactive selection enabled");
+    $("#biomoleculeViewerSource").textContent = local ? "MOL* · LOCAL FILE" : "MOL* · TRACEABLE REMOTE STRUCTURE";
+    bio.message = `${title} · 3D loaded`;
+    setStatus(`MOL* · ${title}`, true);
+  } catch (error) {
+    bio.message = `Mol* error: ${error.message}`;
+    setStatus(bio.message, false);
+  } finally {
+    bio.busy = false;
+    renderInspector();
+  }
+}
+
+async function activateBiomoleculeWorkspace(model = state.selected) {
+  if (model.visual !== "biomolecule") return;
+  const bio = ensureBiomoleculeState(model);
+  $("#biomoleculePanel").hidden = false;
+  await initMolstarViewer();
+  const key = `pdb:${bio.pdbId}`;
+  if (!bio.loadedKey) {
+    const url = `https://files.rcsb.org/download/${encodeURIComponent(bio.pdbId.toUpperCase())}.cif`;
+    await loadBiomoleculeStructure(url, "mmcif", biomoleculeDefaults[bio.kind].title, { key });
+  }
+}
+
+function biomoleculeWorkbenchPanel(model) {
+  if (model.visual !== "biomolecule") return "";
+  const bio = ensureBiomoleculeState(model);
+  const provider = bio.providerStatus || state.backendStatusPayload?.scientific?.biomolecule || {};
+  const selectedOrf = bio.orfs.find((row) => row.id === bio.selectedOrf) || bio.orfs[0];
+  const protein = bio.proteinSequence || selectedOrf?.protein || (bio.sequenceType === "protein" ? bio.sequence : "");
+  const orfOptions = bio.orfs.length
+    ? bio.orfs.map((row) => `<option value="${row.id}" ${row.id === (bio.selectedOrf || bio.orfs[0].id) ? "selected" : ""}>${row.frame} · ${row.startBase}–${row.endBase} · ${row.lengthAa} aa${row.complete ? " · stop" : ""}</option>`).join("")
+    : `<option value="">${bioT("noOrf")}</option>`;
+  const localReady = Boolean(provider.colabfoldLocal?.available);
+  const chimeraReady = Boolean(provider.chimerax?.available);
+  const af = bio.alphaFoldEntry;
+  const afInfo = af ? `<div class="bio-af-result"><b>${escapeHtml(af.entryId)}</b><span>${escapeHtml(af.gene || "")}${af.organism ? ` · ${escapeHtml(af.organism)}` : ""}</span><small>mean pLDDT ${Number(af.meanPlddt || 0).toFixed(2)} · ${af.sequenceLength || "?"} aa</small><a href="${af.entryUrl}" target="_blank" rel="noreferrer">AlphaFold DB entry ↗</a></div>` : "";
+  return `<section class="biomolecule-workbench" dir="${biomoleculeLocale() === "he" ? "rtl" : "ltr"}">
+    <header><div><span>${bioT("kicker")}</span><strong>Mol* 5.4.2 · MIT</strong></div><span class="bio-engine">${bio.busy ? "BUSY" : "LOCAL UI"}</span></header>
+    <details open><summary>${bioT("sequence")}</summary>
+      <div class="bio-inline"><label><span>${bioT("sequenceType")}</span><select id="bioSequenceType"><option value="dna" ${bio.sequenceType === "dna" ? "selected" : ""}>${bioT("dna")}</option><option value="protein" ${bio.sequenceType === "protein" ? "selected" : ""}>${bioT("protein")}</option></select></label><label><span>${bioT("frame")}</span><select id="bioReadingFrame">${[1,2,3,-1,-2,-3].map((frame) => `<option value="${frame}" ${frame === bio.readingFrame ? "selected" : ""}>${frame > 0 ? "+" : ""}${frame}</option>`).join("")}</select></label></div>
+      <textarea id="bioSequence" spellcheck="false" rows="7">${escapeHtml(bio.sequence)}</textarea>
+      <div class="bio-inline bio-actions"><button id="bioAnalyseBtn" class="primary-action" type="button" ${bio.busy ? "disabled" : ""}><i data-lucide="scan-search"></i>${bioT("analyse")}</button><button id="bioResetBtn" class="solver-btn" type="button"><i data-lucide="rotate-ccw"></i>${bioT("reset")}</button></div>
+      ${bio.sequenceType === "dna" ? `<label class="bio-full"><span>${bioT("minOrf")}</span><input id="bioMinimumOrf" type="number" min="1" max="5000" value="${bio.minimumOrfLength}"></label><select id="bioOrfSelect" class="bio-full">${orfOptions}</select><button id="bioUseOrfBtn" class="solver-btn bio-full" type="button" ${selectedOrf ? "" : "disabled"}>${bioT("useOrf")}</button>` : ""}
+      <label class="bio-protein"><span>${bioT("proteinReady")} · ${protein.length} aa</span><textarea id="bioProteinSequence" rows="4" spellcheck="false">${escapeHtml(protein)}</textarea></label>
+    </details>
+    <details open><summary>${bioT("sources")}</summary>
+      <div class="bio-source-row"><label><span>${bioT("pdb")}</span><input id="bioPdbId" value="${escapeHtml(bio.pdbId)}" maxlength="12"></label><button id="bioLoadPdbBtn" class="solver-btn" type="button" ${bio.busy ? "disabled" : ""}>${bioT("loadPdb")}</button></div>
+      <div class="bio-source-row"><label><span>${bioT("afdb")}</span><input id="bioAfAccession" value="${escapeHtml(bio.accession)}" maxlength="10"></label><button id="bioLoadAfBtn" class="solver-btn" type="button" ${bio.busy ? "disabled" : ""}>${bioT("lookup")}</button></div>
+      ${afInfo}<label class="bio-file"><span>${bioT("localFile")}</span><input id="bioStructureFile" type="file" accept=".pdb,.cif,.mmcif,.bcif"></label>
+    </details>
+    <details><summary>${bioT("prediction")}</summary>
+      <div class="bio-provider"><span>AlphaFold DB</span><b class="ready">${bioT("available")}</b><small>open predictions · accession lookup</small></div>
+      <div class="bio-provider"><span>${bioT("local")}</span><b class="${localReady ? "ready" : "off"}">${localReady ? bioT("available") : bioT("unavailable")}</b><small>${escapeHtml(provider.colabfoldLocal?.executable || "RX 5500M is not a supported CUDA target")}</small></div>
+      <button id="bioColabfoldCloudBtn" class="solver-btn bio-full" type="button" ${protein ? "" : "disabled"}><i data-lucide="cloud"></i>${bioT("cloud")}</button>
+      <button id="bioChimeraxBtn" class="solver-btn bio-full" type="button" ${bio.currentStructureUrl && chimeraReady ? "" : "disabled"}><i data-lucide="external-link"></i>${bioT("chimerax")} · ${chimeraReady ? bioT("available") : bioT("unavailable")}</button>
+      <button id="bioRefreshProvidersBtn" class="solver-btn bio-full" type="button">${bioT("refresh")}</button>
+      <small class="bio-boundary">${bioT("boundary")}</small>
+    </details>
+    <div class="bio-message">${escapeHtml(bio.message)}</div>
+  </section>`;
+}
+
+async function analyseBiomoleculeSequence() {
+  const bio = ensureBiomoleculeState();
+  bio.busy = true; bio.message = "Sequence analysis…"; renderInspector();
+  try {
+    const result = await biomoleculeBackendAction({ biomoleculeAction:"translate", sequence:bio.sequence, sequenceType:bio.sequenceType, readingFrame:bio.readingFrame, minimumOrfLength:bio.minimumOrfLength });
+    bio.orfs = result.state.orfs || [];
+    bio.selectedOrf = bio.orfs[0]?.id || "";
+    bio.proteinSequence = result.state.protein || "";
+    state.solverResult = result;
+    bio.message = bio.sequenceType === "dna" ? `${bio.orfs.length} ORF candidates · NCBI table 1` : `${bio.proteinSequence.length} aa · protein sequence validated`;
+    setStatus(`SEQUENCE · ${bio.message}`, true);
+  } catch (error) { bio.message = `Sequence error: ${error.message}`; setStatus(bio.message, false); }
+  finally { bio.busy = false; renderInspector(); }
+}
+
+async function loadAlphaFoldEntry() {
+  const bio = ensureBiomoleculeState();
+  bio.busy = true; bio.message = "AlphaFold DB lookup…"; renderInspector();
+  try {
+    const result = await biomoleculeBackendAction({ biomoleculeAction:"alphafold-db", accession:bio.accession });
+    bio.alphaFoldEntry = result.state;
+    state.solverResult = result;
+    await loadBiomoleculeStructure(result.state.cifUrl, "mmcif", `${result.state.entryId} · AlphaFold DB`, { key:`afdb:${bio.accession}` });
+  } catch (error) { bio.message = `AlphaFold DB: ${error.message}`; setStatus(bio.message, false); }
+  finally { bio.busy = false; renderInspector(); }
+}
+
+async function refreshBiomoleculeProviders() {
+  const bio = ensureBiomoleculeState();
+  bio.busy = true; bio.message = "Checking local providers…"; renderInspector();
+  try {
+    const result = await biomoleculeBackendAction({ biomoleculeAction:"provider-status" });
+    bio.providerStatus = result.state;
+    bio.message = `Mol* local · ColabFold ${result.state.colabfoldLocal?.available ? "ready" : "not installed"} · ChimeraX REST ${result.state.chimerax?.available ? "ready" : "not running"}`;
+  } catch (error) { bio.message = `Provider status: ${error.message}`; }
+  finally { bio.busy = false; renderInspector(); }
+}
+
+function bindBiomoleculePanel() {
+  const bio = ensureBiomoleculeState();
+  syncBiomoleculeRepresentationButtons();
+  $("#bioSequence")?.addEventListener("input", (event) => { bio.sequence = event.target.value; });
+  $("#bioProteinSequence")?.addEventListener("input", (event) => { bio.proteinSequence = event.target.value.replace(/\s+/g, "").toUpperCase(); });
+  $("#bioSequenceType")?.addEventListener("change", (event) => { bio.sequenceType = event.target.value; bio.orfs = []; bio.proteinSequence = bio.sequenceType === "protein" ? bio.sequence : ""; renderInspector(); });
+  $("#bioReadingFrame")?.addEventListener("change", (event) => { bio.readingFrame = Number(event.target.value); });
+  $("#bioMinimumOrf")?.addEventListener("change", (event) => { bio.minimumOrfLength = Number(event.target.value); });
+  $("#bioPdbId")?.addEventListener("input", (event) => { bio.pdbId = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""); });
+  $("#bioAfAccession")?.addEventListener("input", (event) => { bio.accession = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""); });
+  $("#bioOrfSelect")?.addEventListener("change", (event) => { bio.selectedOrf = event.target.value; const row = bio.orfs.find((orf) => orf.id === bio.selectedOrf); if (row) bio.proteinSequence = row.protein; renderInspector(); });
+  $("#bioAnalyseBtn")?.addEventListener("click", analyseBiomoleculeSequence);
+  $("#bioUseOrfBtn")?.addEventListener("click", () => { const row = bio.orfs.find((orf) => orf.id === (bio.selectedOrf || bio.orfs[0]?.id)); if (row) { bio.proteinSequence = row.protein; bio.message = `${row.frame} · ${row.lengthAa} aa selected for prediction`; renderInspector(); } });
+  $("#bioResetBtn")?.addEventListener("click", () => { const preset = biomoleculeDefaults[bio.kind]; bio.sequence = preset.sequence; bio.sequenceType = preset.sequenceType; bio.proteinSequence = bio.kind === "protein" ? preset.sequence : ""; bio.orfs = []; bio.message = bioT("ready"); renderInspector(); });
+  $("#bioLoadPdbBtn")?.addEventListener("click", () => { const id = bio.pdbId.trim().toUpperCase(); if (!/^[A-Z0-9]{4,12}$/.test(id)) { bio.message = "Invalid PDB identifier"; renderInspector(); return; } loadBiomoleculeStructure(`https://files.rcsb.org/download/${encodeURIComponent(id)}.cif`, "mmcif", `PDB ${id}`, { key:`pdb:${id}` }); });
+  $("#bioLoadAfBtn")?.addEventListener("click", loadAlphaFoldEntry);
+  $("#bioStructureFile")?.addEventListener("change", async (event) => {
+    const file = event.target.files?.[0]; if (!file) return;
+    const extension = file.name.toLowerCase().split(".").pop();
+    const format = extension === "pdb" ? "pdb" : "mmcif";
+    const binary = extension === "bcif";
+    if (!["pdb","cif","mmcif","bcif"].includes(extension)) { bio.message = "Use PDB, CIF, mmCIF or BCIF"; renderInspector(); return; }
+    const url = URL.createObjectURL(file);
+    await loadBiomoleculeStructure(url, format, file.name, { binary, key:`file:${file.name}:${file.size}`, local:true });
+    URL.revokeObjectURL(url);
+  });
+  $("#bioColabfoldCloudBtn")?.addEventListener("click", async () => {
+    const protein = bio.proteinSequence.trim(); if (!protein) return;
+    const opened = window.open("https://colab.research.google.com/github/sokrypton/ColabFold/blob/main/AlphaFold2.ipynb", "_blank", "noopener,noreferrer");
+    const copied = await copyTextToClipboard(protein);
+    bio.message = `${copied ? "Protein sequence copied" : "Clipboard blocked"} · ColabFold notebook ${opened ? "opened" : "popup blocked"}`;
+    renderInspector();
+  });
+  $("#bioChimeraxBtn")?.addEventListener("click", async () => {
+    try { await biomoleculeBackendAction({ biomoleculeAction:"chimerax-open", structureUrl:bio.currentStructureUrl }); bio.message = "Structure opened through ChimeraX localhost REST"; }
+    catch (error) { bio.message = `ChimeraX: ${error.message}`; }
+    renderInspector();
+  });
+  $("#bioRefreshProvidersBtn")?.addEventListener("click", refreshBiomoleculeProviders);
+}
+
+function chemistryEditorPanel(model) {
+  if (model.visual !== "molecule") return "";
+  const chemistry = ensureChemistryState();
+  const draft = chemistry.draft;
+  const elementColor = { H:"#ecf5f7", C:"#566a74", N:"#4f8cff", O:"#f26072", F:"#65dca3", P:"#f3a44f", S:"#f0d75a", Cl:"#4ed47b", Br:"#a64d3f", I:"#875cb1", B:"#efa19a" };
+  const bonds = draft.bonds.map(([a,b,order]) => {
+    const left = draft.atoms[a]; const right = draft.atoms[b];
+    if (!left || !right) return "";
+    return `<line x1="${left.x}" y1="${left.y}" x2="${right.x}" y2="${right.y}" stroke="#8ac8d1" stroke-width="${1.7 + Number(order || 1) * 1.25}" stroke-linecap="round" opacity=".78"/>`;
+  }).join("");
+  const atoms = draft.atoms.map((atom, index) => `<g class="chem-editor-atom ${chemistry.selectedAtom === index ? "selected" : ""}" data-chem-atom="${index}" transform="translate(${atom.x} ${atom.y})"><circle r="13" fill="${elementColor[atom.element] || "#82959b"}"/><text y="4" text-anchor="middle">${atom.element}</text></g>`).join("");
+  const tools = ["H","B","C","N","O","F","P","S","Cl","Br","I"].map((element) => `<button type="button" data-chem-element="${element}" class="${chemistry.atomTool === element ? "active" : ""}">${element}</button>`).join("");
+  const libraryOptions = Object.entries(chemistryLibrary).map(([key,[name,formula]]) => `<option value="${key}" ${chemistry.libraryChoice === key ? "selected" : ""}>${name} · ${formula}</option>`).join("");
+  const reactionOptions = chemistryReactionOptions.map(([key,label]) => `<option value="${key}" ${chemistry.reactionChoice === key ? "selected" : ""}>${label}</option>`).join("");
+  const chips = chemistry.addedCompounds.length ? chemistry.addedCompounds.map((key,index) => `<button type="button" class="chem-chip" data-chem-remove="${index}" title="Удалить реагент">${chemistryLibrary[key]?.[0] || key} <b>×</b></button>`).join("") : `<small>Дополнительные соединения ещё не добавлены.</small>`;
+  const reactionInfo = chemistry.reaction ? `<div class="chem-reaction-result"><b>${escapeHtml(chemistry.reaction.equation)}</b><span>${escapeHtml(chemistry.reaction.conditions)}</span><small>${escapeHtml(chemistry.reaction.scientificBoundary)}</small></div>` : "";
+  return `<section class="chemistry-workbench">
+    <header><div><span>MOLECULE & REACTION WORKBENCH</span><strong>Свободный редактор молекул</strong></div><span class="chem-engine">RDKit · local</span></header>
+    <details open><summary>Редактор атомов и связей</summary>
+      <p>Выберите элемент. Клик по пустому полю добавляет атом; два последовательных клика по атомам создают связь выбранного порядка.</p>
+      <div class="chem-tool-row">${tools}</div>
+      <div class="chem-bond-row"><label>Связь <select id="chemBondOrder"><option value="1" ${chemistry.bondOrder===1?"selected":""}>одинарная</option><option value="2" ${chemistry.bondOrder===2?"selected":""}>двойная</option><option value="3" ${chemistry.bondOrder===3?"selected":""}>тройная</option></select></label><button id="chemDeleteAtomBtn" class="solver-btn" type="button">Удалить атом</button><button id="chemClearBtn" class="solver-btn" type="button">Очистить</button></div>
+      <svg id="chemEditorCanvas" class="chem-editor-canvas" viewBox="0 0 280 164" role="img" aria-label="Редактор графа молекулы">${bonds}${atoms}</svg>
+      <label class="chem-smiles"><span>SMILES (можно редактировать напрямую)</span><input id="chemSmilesInput" value="${escapeHtml(chemistry.smilesInput)}" placeholder="Например: CCO или c1ccccc1"></label>
+      <button id="chemBuildBtn" class="primary-action chem-wide" type="button" ${chemistry.busy?"disabled":""}><i data-lucide="box"></i><span>Построить и оптимизировать 3D</span></button>
+    </details>
+    <details open><summary>Смесь и химическая реакция</summary>
+      <p>Любую исходную молекулу можно поместить в общую 3D-сцену с соединениями из библиотеки.</p>
+      <div class="chem-library-row"><select id="chemLibrarySelect">${libraryOptions}</select><button id="chemAddCompoundBtn" class="solver-btn" type="button" ${chemistry.busy?"disabled":""}>Добавить</button></div>
+      <div class="chem-chips">${chips}</div>
+      <label class="chem-reaction-select"><span>Проверенный стехиометрический шаблон</span><select id="chemReactionSelect">${reactionOptions}</select></label>
+      <div class="chem-actions"><button id="chemRunReactionBtn" class="primary-action" type="button" ${chemistry.busy?"disabled":""}><i data-lucide="flask-conical"></i><span>Провести реакцию</span></button><button id="chemResetBtn" class="solver-btn" type="button"><i data-lucide="rotate-ccw"></i> Reset · исходная молекула</button></div>
+      ${reactionInfo}<div class="chem-message">${escapeHtml(chemistry.busy ? "RDKit рассчитывает 3D-конформеры…" : chemistry.message)}</div>
+      <small class="chem-boundary">Анимация показывает сбалансированные графы реагентов и продуктов. Это не квантовая молекулярная динамика и не рассчитанная траектория переходного состояния.</small>
+    </details>
+  </section>`;
+}
+
+function smartMatterPanel(model) {
+  if (model.visual !== "smartMatter") return "";
+  const smart = ensureSmartMatterState();
+  const plan = smart.plan;
+  const checks = plan?.checks;
+  const valid = Boolean(checks?.valid);
+  const totalAtoms = checks?.atomCount || 0;
+  const totalBonds = checks?.bondCount || 0;
+  return `<section class="smart-matter-workbench">
+    ${smart.precomputed ? '<p>GitHub Pages · заранее рассчитанная цель RDKit, seed 61453. Сборка выполняется в браузере; новый научный расчёт доступен локально.</p>' : ''}
+    <div class="smart-matter-head"><div><span>SMART MATTER ASSEMBLY</span><strong>${escapeHtml(plan?.formula || "RDKit target not calculated")}</strong></div><b class="${valid ? "pass" : "pending"}">${checks ? (valid ? "GRAPH PASS" : "GRAPH FAIL") : "WAITING"}</b></div>
+    <p>Сначала — только каркас цели. Частица проходит i→0 в полном размере, занимает своё место и образует доступные связи. Затем начинает следующая.</p>
+    <div class="smart-stage-track">${["READY","MATERIALIZING","NAVIGATING","BONDING","STABLE"].map((stage) => `<span class="${stage === smart.stage ? "active" : ""}">${stage}</span>`).join("")}</div>
+    <div class="smart-counters">
+      <div><span>Видимы в 3D</span><b id="smartVisibleCount">${smart.visibleAtoms} / ${totalAtoms}</b></div>
+      <div><span>В целевой позиции</span><b id="smartBondedCount">${smart.bondedAtoms} / ${totalAtoms}</b></div>
+      <div><span>Связи CanBond</span><b id="smartBondCount">${smart.formedBonds} / ${totalBonds}</b></div>
+    </div>
+    <div class="smart-science-split"><div><span>Научная часть</span><p>RDKit: граф, элементы, валентности, радиусы, ETKDGv3 и ${escapeHtml(plan?.forceField || "MMFF94/UFF")}‑конформер.</p></div><div><span>Авторская гипотеза</span><p>Полноразмерное появление частиц при переходе i&lt;0 → i=0 и программируемая перестройка материи.</p></div></div>
+    <div class="smart-actions"><button id="smartMatterPrepareBtn" class="solver-btn" type="button" ${smart.busy ? "disabled" : ""}>Пересчитать цель</button><button id="smartMatterRandomBtn" class="solver-btn" type="button" ${smart.busy ? "disabled" : ""}>Новая конфигурация</button><button id="smartMatterResetBtn" class="solver-btn" type="button">Сброс</button></div>
+    <div id="smartMatterMessage" class="chem-message">${escapeHtml(smart.busy ? "RDKit рассчитывает молекулярный граф…" : smart.message)}</div>
+  </section>`;
+}
+
+function bindSmartMatterPanel() {
+  const smart = ensureSmartMatterState();
+  if (!smart) return;
+  if (smart.precomputed) {
+    const seed=$('#param-smartMatterSeed'); if(seed)seed.disabled=true;
+    const random=$('#smartMatterRandomBtn'); if(random)random.disabled=true;
+  }
+  $("#smartMatterPrepareBtn")?.addEventListener("click", () => { smart.plan = null; void prepareSmartMatterPlan(false); });
+  $("#smartMatterRandomBtn")?.addEventListener("click", () => {
+    state.values.smartMatterSeed = Math.floor(Math.random() * 99998) + 1;
+    const control = $("#param-smartMatterSeed");
+    if (control) control.value = String(state.values.smartMatterSeed);
+    const output = $("#out-smartMatterSeed");
+    if (output) output.textContent = String(state.values.smartMatterSeed);
+    ensureSmartMatterState(true);
+    void prepareSmartMatterPlan(false);
+  });
+  $("#smartMatterResetBtn")?.addEventListener("click", () => {
+    smart.running = false;
+    smart.stage = "READY";
+    smart.visibleAtoms = smart.bondedAtoms = smart.formedBonds = 0;
+    smart.sequence = smart.plan ? createAssembly(smart.plan.particles) : null;
+    state.interaction = null;
+    rebuildSpecimen();
+    renderInspector();
+  });
+}
+
+function smartProteinRepairPanel(model) {
+  if (model.visual !== "smartProteinRepair") return "";
+  const repair = ensureSmartProteinRepairState();
+  const plan = repair.plan;
+  const report = plan?.damageReport || {};
+  const content = plan?.smartMatterContent || {};
+  const validation = plan?.validation || {};
+  const required = Number(plan?.repairPlan?.requiredSmartMatterParticles || 0);
+  const broken = Number(report.brokenBonds || 0);
+  return `<section class="smart-matter-workbench protein-repair-workbench">
+    <p class="smart-science-split">${repair.precomputed ? 'GitHub Pages · заранее рассчитанная демонстрация 1CRN; Python/RDKit здесь не выполняется. Параметры расчёта меняются в локальном приложении.' : 'Боковой поток γ → повреждение → немедленное замещение через i. Анимация событий модели; не расчёт Geant4-DNA.'}</p>
+    <div class="smart-matter-head"><div><span>SMART MATTER PROTEIN REPAIR</span><strong>${escapeHtml(plan ? `${plan.reference.pdbId} · ${plan.reference.residues.length} residues · chain ${plan.reference.chains.join(",")}` : "RCSB/RDKit reference pending")}</strong></div><b class="${plan ? "pass" : "pending"}">${escapeHtml(repair.stage)}</b></div>
+    <div class="protein-graph-switch" role="group" aria-label="Protein graph state">
+      ${[["ORIGINAL","G₀ ORIGINAL"],["DAMAGED","Gᴅ DAMAGED"],["REPAIRED","Gʀ REPAIRED"]].map(([stage,label]) => `<button type="button" data-protein-stage="${stage}" class="${repair.stage===stage?"active":""}" ${plan?"":"disabled"}>${label}</button>`).join("")}
+    </div>
+    <div class="smart-stage-track protein-repair-track">${["ORIGINAL","IRRADIATION","DAMAGE ANALYSIS","REPAIR PLAN","i→3D","BONDING","REPAIRED"].map((stage) => `<span class="${stage === repair.stage || (repair.stage === "DAMAGED" && stage === "DAMAGE ANALYSIS") || (repair.stage === "REPAIRING" && stage === "i→3D") ? "active" : ""}">${stage}</span>`).join("")}</div>
+    <div class="smart-counters">
+      <div><span>Частицы вышли в 3D</span><b id="proteinRepairVisible">${repair.visibleParticles} / ${required}</b></div>
+      <div><span>Заместители установлены</span><b id="proteinRepairPlaced">${repair.placedParticles} / ${required}</b></div>
+      <div><span>Связи восстановлены</span><b id="proteinRepairBonds">${repair.restoredBonds} / ${broken}</b></div>
+    </div>
+    <details open><summary>DAMAGE REPORT</summary><div class="protein-report-grid">
+      <span>Ionization events<b>${report.ionizationEvents ?? "—"}</b></span><span>Atoms affected<b>${report.atomsAffected ?? "—"}</b></span>
+      <span>Atoms missing<b>${report.atomsMissing ?? "—"}</b></span><span>Broken bonds<b>${report.brokenBonds ?? "—"}</b></span>
+      <span>Residues affected<b>${report.residuesAffected ?? "—"}</b></span><span>Backbone damage<b>${report.backboneDamage === undefined ? "—" : report.backboneDamage ? "YES" : "NO"}</b></span>
+    </div></details>
+    <details open><summary>REPAIR PLAN · ΔG = G₀ − Gᴅ</summary><div class="protein-report-grid">
+      <span>Required Smart Matter<b>${required}</b></span><span>Atomic replacement<b>${content.atomicReplacementPercent?.toFixed?.(2) ?? "—"}%</b></span>
+      <span>Mass replacement<b>${content.massReplacementPercent?.toFixed?.(2) ?? "—"}%</b></span><span>Topology match<b>${validation.topologyMatchPercent?.toFixed?.(0) ?? "—"}%</b></span>
+    </div><p class="protein-elements">${escapeHtml(Object.entries(content.byElement || {}).map(([element,count]) => `${element}: ${count}`).join(" · ") || "No repair plan yet")}</p></details>
+    <div class="smart-science-split"><div><span>Established / sourced</span><p>RCSB PDB 1CRN coordinates, RDKit molecular graph, elemental properties and the Compton energy-transfer equation.</p></div><div><span>Hypothesis / approximation</span><p>Smart Matter, movement through i and programmable substitution are hypothetical. Damage thresholds are illustrative, not Geant4‑DNA.</p></div></div>
+    <div class="protein-validation ${validation.molecularDynamics?.startsWith?.("NOT RUN") ? "incomplete" : "pass"}"><b>VALIDATE REPAIR</b><span>Bond ${validation.bondValidation ? "PASS" : "—"} · topology ${validation.topologyMatchPercent ?? "—"}%</span><small>${escapeHtml(validation.molecularDynamics || "MD validation pending")}</small></div>
+    <div class="smart-actions protein-actions"><button id="proteinIrradiateBtn" class="primary-action" type="button" ${plan && !repair.busy ? "" : "disabled"}>Gamma irradiation</button><button id="proteinReleaseBtn" class="solver-btn" type="button" ${plan && !repair.busy ? "" : "disabled"}>Release Smart Matter</button><button id="proteinRecalculateBtn" class="solver-btn" type="button" ${repair.busy ? "disabled" : ""}>Recalculate</button><button id="proteinResetBtn" class="solver-btn" type="button">Reset</button></div>
+    <div class="smart-actions protein-actions"><button id="proteinChimeraxBtn" class="solver-btn" type="button" ${plan ? "" : "disabled"}>Open original in ChimeraX</button><button id="proteinExportBtn" class="solver-btn" type="button" ${plan ? "" : "disabled"}>Export PDB + Smart Matter JSON</button></div>
+    <div id="proteinRepairMessage" class="chem-message">${escapeHtml(repair.busy ? "Calculating protein graphs…" : repair.message)}</div>
+  </section>`;
+}
+
+function downloadProteinRepairBundle() {
+  const repair = ensureSmartProteinRepairState();
+  if (!repair?.plan) return;
+  const graph = repair.stage === "DAMAGED" ? repair.plan.damaged : repair.stage === "ORIGINAL" ? {atoms:repair.plan.reference.atoms,bonds:repair.plan.reference.bonds} : repair.plan.repaired;
+  const present = graph.atoms.filter((atom) => atom.present !== false);
+  const serialById = new Map(present.map((atom,index) => [Number(atom.id), index+1]));
+  const atomLines = present.map((atom,index) => {
+    const serial=String(index+1).padStart(5," "), name=String(atom.atomName||atom.element).slice(0,4).padStart(4," ");
+    const residue=String(atom.residueName||"UNK").slice(0,3).padStart(3," "), chain=String(atom.chain||"A").slice(0,1);
+    const residueNumber=String(atom.residueNumber||1).padStart(4," ");
+    const x=Number(atom.x).toFixed(3).padStart(8," "), y=Number(atom.y).toFixed(3).padStart(8," "), z=Number(atom.z).toFixed(3).padStart(8," ");
+    return `ATOM  ${serial} ${name} ${residue} ${chain}${residueNumber}    ${x}${y}${z}  1.00  0.00          ${String(atom.element).padStart(2," ")}`;
+  });
+  const conect = graph.bonds.filter((bond) => !bond.broken && serialById.has(Number(bond.a)) && serialById.has(Number(bond.b)))
+    .map((bond) => `CONECT${String(serialById.get(Number(bond.a))).padStart(5," ")}${String(serialById.get(Number(bond.b))).padStart(5," ")}`);
+  const pdb = [...atomLines,...conect,"END",""].join("\n");
+  const metadata = JSON.stringify({
+    schema:"matter-frontier-lab.smart-matter.v1", pdbId:repair.plan.reference.pdbId, graphState:repair.stage,
+    smartMatterAtoms:repair.plan.repaired.atoms.filter((atom) => atom.smartMatter).map((atom) => ({ atomId:atom.id, serial:serialById.get(Number(atom.id)) || null, effectiveElement:atom.element, residue:`${atom.residueName} ${atom.residueNumber}`, chain:atom.chain })),
+    damageEvents:repair.plan.damageEvents, validation:repair.plan.validation
+  }, null, 2);
+  [[`${repair.plan.reference.pdbId}_${repair.stage.toLowerCase()}.pdb`,pdb,"chemical/x-pdb"],[`${repair.plan.reference.pdbId}_smart_matter_metadata.json`,metadata,"application/json"]].forEach(([name,content,type]) => {
+    const link=document.createElement("a"); link.href=URL.createObjectURL(new Blob([content],{type})); link.download=name; link.click(); setTimeout(()=>URL.revokeObjectURL(link.href),1000);
+  });
+}
+
+function bindSmartProteinRepairPanel() {
+  const repair = ensureSmartProteinRepairState();
+  if (repair?.precomputed) document.querySelectorAll('[data-param]').forEach(control=>{
+    if (['photonCount','photonEnergyMeV','exposure','damageIntensity','damageSeed'].includes(control.dataset.param)) control.disabled=true;
+  });
+  if (!repair) return;
+  $$('[data-protein-stage]').forEach((button) => button.addEventListener("click", () => setProteinGraphState(button.dataset.proteinStage)));
+  $("#proteinIrradiateBtn")?.addEventListener("click", irradiateSmartProtein);
+  $("#proteinReleaseBtn")?.addEventListener("click", releaseProteinRepairMatter);
+  $("#proteinRecalculateBtn")?.addEventListener("click", () => { ensureSmartProteinRepairState(true); void prepareSmartProteinRepairPlan(); });
+  $("#proteinResetBtn")?.addEventListener("click", () => { if (repair.plan) setProteinGraphState("ORIGINAL"); });
+  $("#proteinExportBtn")?.addEventListener("click", downloadProteinRepairBundle);
+  $("#proteinChimeraxBtn")?.addEventListener("click", async () => {
+    if (!repair.plan) return;
+    repair.message = "Opening the sourced 1CRN structure through the optional ChimeraX REST bridge…"; renderInspector();
+    try { await biomoleculeBackendAction({ biomoleculeAction:"chimerax-open", structureUrl:repair.plan.reference.sourceUrl }); repair.message = "Original structure opened in ChimeraX"; }
+    catch (error) { repair.message = `ChimeraX: ${error.message}`; }
+    renderInspector();
+  });
+}
+
+function chemistryApplySolverResult(result, message) {
+  state.solverResult = result;
+  state.solverMs = 0;
+  $("#chartSubtitle").textContent = result.primaryLabel;
+  renderMetrics();
+  drawChart();
+  setStatus(message, false);
+}
+
+async function chemistryBackendAction(values) {
+  if (!state.backendOnline) throw new Error("Локальный server.py не отвечает");
+  const response = await fetch("./api/solve", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ model:"quantumChemistryLab", values:{ ...state.values, ...values } }) });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || "Chemistry backend error");
+  state.solverMs = payload.elapsed_ms;
+  return payload.result;
+}
+
+async function buildChemistryStructure() {
+  const chemistry = ensureChemistryState();
+  chemistry.busy = true; renderInspector();
+  try {
+    const values = chemistry.smilesInput.trim()
+      ? { chemistryAction:"structure", customSmiles:chemistry.smilesInput.trim(), customName:"Custom molecule" }
+      : { chemistryAction:"structure", customGraph:chemistry.draft, customName:"Graph editor molecule" };
+    const result = await chemistryBackendAction(values);
+    chemistry.original = structuredClone(result.state);
+    chemistry.display = structuredClone(result.state);
+    chemistry.smilesInput = result.state.smiles;
+    chemistry.addedCompounds = [];
+    chemistry.reaction = null;
+    chemistry.message = `${result.state.formula || "Молекула"} · ${result.state.forceField} · 3D готов`;
+    chemistryApplySolverResult(result, `RDKIT · ${chemistry.message}`);
+    rebuildSpecimen();
+  } catch (error) {
+    chemistry.message = `Ошибка структуры: ${error.message}`;
+    setStatus(chemistry.message, false);
+  } finally { chemistry.busy = false; renderInspector(); }
+}
+
+async function refreshChemistryMixture() {
+  const chemistry = ensureChemistryState();
+  const baseSmiles = chemistry.original?.smiles || chemistryLibrary[chemistry.preset]?.[2] || "O";
+  const compounds = [{ smiles:baseSmiles, name:chemistry.original?.molecule || chemistryLibrary[chemistry.preset]?.[0] || "Molecule" },
+    ...chemistry.addedCompounds.map((preset) => ({ preset }))];
+  const result = await chemistryBackendAction({ chemistryAction:"mixture", compounds });
+  chemistry.display = structuredClone(result.state);
+  chemistry.reaction = null;
+  chemistry.message = `В 3D-сцене соединений: ${compounds.length}`;
+  chemistryApplySolverResult(result, `RDKIT MIXTURE · ${compounds.length} components`);
+  rebuildSpecimen();
+}
+
+async function addChemistryCompound() {
+  const chemistry = ensureChemistryState();
+  chemistry.addedCompounds.push(chemistry.libraryChoice);
+  chemistry.busy = true; renderInspector();
+  try { await refreshChemistryMixture(); }
+  catch (error) { chemistry.addedCompounds.pop(); chemistry.message = `Ошибка смеси: ${error.message}`; setStatus(chemistry.message, false); }
+  finally { chemistry.busy = false; renderInspector(); }
+}
+
+async function runChemistryReaction() {
+  const chemistry = ensureChemistryState();
+  chemistry.busy = true; renderInspector();
+  try {
+    const result = await chemistryBackendAction({ chemistryAction:"reaction", reactionId:chemistry.reactionChoice });
+    chemistry.reaction = { ...structuredClone(result.state), running:true, startedAt:clock.elapsedTime };
+    chemistry.display = null;
+    chemistry.addedCompounds = [];
+    chemistry.message = `Запущено · ${result.state.equation}`;
+    chemistryApplySolverResult(result, `RDKit REACTION · ${result.state.equation}`);
+    rebuildSpecimen();
+  } catch (error) { chemistry.message = `Ошибка реакции: ${error.message}`; setStatus(chemistry.message, false); }
+  finally { chemistry.busy = false; renderInspector(); }
+}
+
+function resetChemistryWorkbench() {
+  const chemistry = ensureChemistryState();
+  chemistry.display = chemistry.original ? structuredClone(chemistry.original) : null;
+  chemistry.reaction = null;
+  chemistry.addedCompounds = [];
+  chemistry.message = "Reset · восстановлена исходная одиночная молекула";
+  rebuildSpecimen();
+  renderInspector();
+  setStatus(chemistry.message, false);
+}
+
+function bindChemistryPanel() {
+  const chemistry = ensureChemistryState();
+  if (!chemistry) return;
+  $$("[data-chem-element]").forEach((button) => button.addEventListener("click", () => { chemistry.atomTool = button.dataset.chemElement; renderInspector(); }));
+  $("#chemBondOrder")?.addEventListener("change", (event) => { chemistry.bondOrder = Number(event.target.value); });
+  $("#chemSmilesInput")?.addEventListener("input", (event) => { chemistry.smilesInput = event.target.value; });
+  $("#chemLibrarySelect")?.addEventListener("change", (event) => { chemistry.libraryChoice = event.target.value; });
+  $("#chemReactionSelect")?.addEventListener("change", (event) => { chemistry.reactionChoice = event.target.value; });
+  $("#chemEditorCanvas")?.addEventListener("click", (event) => {
+    const atomNode = event.target.closest?.("[data-chem-atom]");
+    if (atomNode) {
+      const index = Number(atomNode.dataset.chemAtom);
+      if (chemistry.selectedAtom !== null && chemistry.selectedAtom !== index) {
+        const key = [chemistry.selectedAtom, index].sort((a,b)=>a-b);
+        const existing = chemistry.draft.bonds.find((bond) => bond[0] === key[0] && bond[1] === key[1]);
+        if (existing) existing[2] = chemistry.bondOrder;
+        else chemistry.draft.bonds.push([key[0], key[1], chemistry.bondOrder]);
+      }
+      chemistry.selectedAtom = index;
+    } else {
+      const svg = $("#chemEditorCanvas"); const rect = svg.getBoundingClientRect();
+      const point = svg.createSVGPoint(); point.x = event.clientX; point.y = event.clientY;
+      const local = point.matrixTransform(svg.getScreenCTM().inverse());
+      const index = chemistry.draft.atoms.length;
+      chemistry.draft.atoms.push({ element:chemistry.atomTool, x:clamp(local.x,14,266), y:clamp(local.y,14,150) });
+      if (chemistry.selectedAtom !== null) chemistry.draft.bonds.push([Math.min(chemistry.selectedAtom,index), Math.max(chemistry.selectedAtom,index), chemistry.bondOrder]);
+      chemistry.selectedAtom = index;
+    }
+    chemistry.smilesInput = "";
+    chemistry.message = "Граф изменён · нажмите «Построить 3D»";
+    renderInspector();
+  });
+  $("#chemDeleteAtomBtn")?.addEventListener("click", () => {
+    const index = chemistry.selectedAtom;
+    if (index === null) return;
+    chemistry.draft.atoms.splice(index, 1);
+    chemistry.draft.bonds = chemistry.draft.bonds.filter((bond) => !bond.includes(index)).map(([a,b,order]) => [a > index ? a-1 : a, b > index ? b-1 : b, order]);
+    chemistry.selectedAtom = null; chemistry.smilesInput = ""; renderInspector();
+  });
+  $("#chemClearBtn")?.addEventListener("click", () => { chemistry.draft = { atoms:[], bonds:[] }; chemistry.selectedAtom = null; chemistry.smilesInput = ""; renderInspector(); });
+  $("#chemBuildBtn")?.addEventListener("click", buildChemistryStructure);
+  $("#chemAddCompoundBtn")?.addEventListener("click", addChemistryCompound);
+  $$("[data-chem-remove]").forEach((button) => button.addEventListener("click", async () => {
+    chemistry.addedCompounds.splice(Number(button.dataset.chemRemove), 1);
+    chemistry.busy = true; renderInspector();
+    try { if (chemistry.addedCompounds.length) await refreshChemistryMixture(); else resetChemistryWorkbench(); }
+    catch (error) { chemistry.message = `Ошибка смеси: ${error.message}`; }
+    finally { chemistry.busy = false; renderInspector(); }
+  }));
+  $("#chemRunReactionBtn")?.addEventListener("click", runChemistryReaction);
+  $("#chemResetBtn")?.addEventListener("click", resetChemistryWorkbench);
+}
+
 function renderInspector() {
   const model = state.selected;
+  const biomoleculeMode = model.visual === "biomolecule";
+  $(".stage-panel").classList.toggle("biomolecule-mode", biomoleculeMode);
+  $(".inspector-panel").classList.toggle("biomolecule-inspector", biomoleculeMode);
+  $("#biomoleculePanel").hidden = !biomoleculeMode;
   renderViewModes(model);
   const communicationLabBtn = $("#communicationLabBtn");
   if (communicationLabBtn) communicationLabBtn.remove();
@@ -1898,7 +3117,7 @@ function renderInspector() {
   $("#certaintyBadge").className = `certainty ${model.status}`;
   $("#certaintyBadge").textContent = model.statusLabel;
   $("#telemetryObject").textContent = model.composition?.join("") || model.title;
-  $("#telemetryScale").textContent = model.visual === "atom" ? "10⁻¹⁰ m" : model.visual === "neutrinoLens" ? "macroscopic" : model.visual === "collider" ? "event display" : "1 fm";
+  $("#telemetryScale").textContent = model.visual === "atom" ? "10⁻¹⁰ m" : model.visual === "neutrinoLens" ? "macroscopic" : model.visual === "collider" ? "event display" : biomoleculeMode || model.visual === "smartMatter" ? "Å (target conformer)" : model.visual === "smartProteinRepair" ? "Å · PDB coordinates" : "1 fm";
   $("#telemetryState").textContent = model.status;
   const isMFieldRegion = model.visual === "complexSpin" && state.values.configuration === "lattice";
   const matrixPassage = isMFieldRegion && state.view === "passage";
@@ -1906,14 +3125,28 @@ function renderInspector() {
   const blackHoleMerger = model.id === "blackHole" && state.view === "blackHoleMerger";
   const standingWaveCore = model.visual === "standingWaveCore";
   const resonantTriple = model.visual === "resonantTriple";
+  const smartMatter = model.visual === "smartMatter";
+  const smartProteinRepair = model.visual === "smartProteinRepair";
   const runInteractionButton = $("#runInteractionBtn");
-  runInteractionButton.hidden = (["macro", "polytope4d"].includes(model.visual) && !blackHoleMerger && !resonantTriple) || (model.visual === "complexSpin" && !matrixPassage && !phaseDemo);
+  runInteractionButton.hidden = biomoleculeMode || (["macro", "polytope4d"].includes(model.visual) && !blackHoleMerger && !resonantTriple) || (model.visual === "complexSpin" && !matrixPassage && !phaseDemo);
   const runInteractionLabel = $("#runInteractionBtn span");
   if (runInteractionLabel) runInteractionLabel.textContent = matrixPassage ? ((localStorage.getItem("qcd-neutrino-language") || "en") === "ru" ? "Запустить зонд" : "Run probe") : interactionLabel(model);
 
   if (phaseDemo && runInteractionLabel) runInteractionLabel.textContent = (localStorage.getItem("qcd-neutrino-language") || "en") === "ru" ? "Р—Р°РїСѓСЃС‚РёС‚СЊ РґРµРјРѕРЅСЃС‚СЂР°С†РёСЋ" : "Run demonstration";
   if (blackHoleMerger && runInteractionLabel) runInteractionLabel.textContent = state.blackHoleMergerRunning ? "Restart merger" : "Start merger";
   if (resonantTriple && runInteractionLabel) runInteractionLabel.textContent = state.resonantTripleRunning ? "Restart binary merger" : "Start binary merger";
+  if (smartMatter) {
+    const smart = ensureSmartMatterState();
+    const label = smart.busy ? "RDKit рассчитывает…" : smart.running ? "Перезапустить сборку" : smart.stage === "STABLE" ? "Повторить сборку" : "Создать молекулу";
+    runInteractionButton.innerHTML = `<i data-lucide="${smart.running ? "rotate-ccw" : "play"}"></i><span>${label}</span>`;
+    runInteractionButton.disabled = smart.busy;
+  }
+  if (smartProteinRepair) {
+    const repair = ensureSmartProteinRepairState();
+    const label = repair.busy ? "RDKit рассчитывает…" : repair.running ? "Ремонт выполняется…" : repair.stage === "ORIGINAL" ? "Гамма-облучение" : repair.stage === "DAMAGED" ? "Выпустить умную материю" : "Повторить эксперимент";
+    runInteractionButton.innerHTML = `<i data-lucide="${repair.stage === "ORIGINAL" ? "radiation" : repair.stage === "DAMAGED" ? "sparkles" : "rotate-ccw"}"></i><span>${label}</span>`;
+    runInteractionButton.disabled = repair.busy || repair.running;
+  }
   if (standingWaveCore) {
     const language = localStorage.getItem("qcd-neutrino-language") || "en";
     const label = state.paused
@@ -1947,7 +3180,7 @@ function renderInspector() {
       <label for="param-${parameter.key}"><span>${parameter.label}</span><output id="out-${parameter.key}">${formatParameter(value, parameter)}</output></label>
       <input id="param-${parameter.key}" data-param="${parameter.key}" type="range" min="${parameter.min}" max="${parameter.max}" step="${parameter.step}" value="${value}">
     </div>`;
-  }).join("") + (blackHoleMerger ? blackHoleMergerPanel() : "") + (resonantTriple ? resonantTriplePanel() : "") + (isMFieldRegion ? mFieldProjectionPanel() : "") + (matrixPassage ? matrixPassageExplanation() : "") + (phaseDemo ? phaseDemoExplanation() : "") + (model.visual === "collider" ? `
+  }).join("") + (model.visual === "mOrchestrator" ? mOrchestrator.panel() : "") + (blackHoleMerger ? blackHoleMergerPanel() : "") + (resonantTriple ? resonantTriplePanel() : "") + (isMFieldRegion ? mFieldProjectionPanel() : "") + (matrixPassage ? matrixPassageExplanation() : "") + (phaseDemo ? phaseDemoExplanation() : "") + smartMatterPanel(model) + smartProteinRepairPanel(model) + (model.visual === "collider" ? `
     <div class="collider-controls">
       <div class="collider-controls-title">Collider display</div>
       <label for="detectorOpacity"><span>Detector visibility</span><output id="detectorOpacityOut">${Math.round((state.values.detectorOpacity ?? 0) * 100)}%</output></label>
@@ -1955,10 +3188,29 @@ function renderInspector() {
       <label for="collisionSpeed"><span>Event speed</span><output id="collisionSpeedOut">${(state.values.collisionSpeed ?? 1).toFixed(2)}×</output></label>
       <input id="collisionSpeed" type="range" min="0.05" max="2" step="0.05" value="${state.values.collisionSpeed ?? 1}">
       <button id="colliderPauseBtn" class="solver-btn" type="button">${state.paused ? "Resume event" : "Pause event"}</button>
-  </div>` : "") + (model.visual === "collider" ? collisionExplanation() : "") + (isBaryonModel(model) && state.view === "confinement" ? confinementControls() : "") + multiquarkLauncherPanel(model) + quantumGpuPanel(model);
+  </div>` : "") + (model.visual === "collider" ? collisionExplanation() : "") + (isBaryonModel(model) && state.view === "confinement" ? confinementControls() : "") + multiquarkLauncherPanel(model) + quantumGpuPanel(model) + chemistryEditorPanel(model) + biomoleculeWorkbenchPanel(model);
   $("#parameterControls").querySelectorAll("[data-param]").forEach((control) => control.addEventListener(control.tagName === "SELECT" ? "change" : "input", () => {
     const parameter = model.parameters.find((item) => item.key === control.dataset.param);
     state.values[control.dataset.param] = parameter.type === "select" ? control.value : Number(control.value);
+    if (control.dataset.param === "moleculePreset") {
+      ensureChemistryState(true);
+      void buildChemistryStructure();
+    }
+    if (state.selected.visual === "smartMatter" && ["smartMoleculePreset", "smartMatterSeed"].includes(control.dataset.param)) {
+      ensureSmartMatterState(true);
+      state.interaction = null;
+      rebuildSpecimen();
+      if (control.dataset.param === "smartMoleculePreset") void prepareSmartMatterPlan(false);
+    }
+    if (state.selected.visual === "smartProteinRepair") {
+      if (control.dataset.param === "showSmartMatter") {
+        rebuildSpecimen();
+      } else {
+        ensureSmartProteinRepairState(true);
+        state.interaction = null;
+        rebuildSpecimen();
+      }
+    }
     if (control.dataset.param === "quantumCircuit" && control.value === "grover2") {
       state.values.quantumQubits = 2;
       const qubitControl = $("#param-quantumQubits");
@@ -1990,7 +3242,7 @@ function renderInspector() {
       state.resonantTripleManualRadius = 1;
       state.interaction = null;
     }
-    if (["beamA", "beamB", "processMode", "baryonNumber", "configuration", "binaryCount", "binaryMassA", "binaryMassB", "binaryMassC", "spinA", "spinB", "initialSeparation", "mergerConfiguration", "inclination", "coreCount"].includes(control.dataset.param) || ["molecule", "semiconductor"].includes(state.selected.visual) || (state.selected.visual === "resonantTriple" && resonantTripleParameters.includes(control.dataset.param)) || (state.selected.id === "blackHole" && ["mass", "diskRadius"].includes(control.dataset.param)) || (state.selected.visual === "meson" && ["separation", "stringTension", "constituentMass"].includes(control.dataset.param))) rebuildSpecimen();
+    if (["beamA", "beamB", "processMode", "baryonNumber", "configuration", "binaryCount", "binaryMassA", "binaryMassB", "binaryMassC", "spinA", "spinB", "initialSeparation", "mergerConfiguration", "inclination", "coreCount"].includes(control.dataset.param) || ["molecule", "semiconductor", "smartProteinRepair"].includes(state.selected.visual) || (state.selected.visual === "smartMatter" && !state.smartMatter?.running) || (state.selected.visual === "resonantTriple" && resonantTripleParameters.includes(control.dataset.param)) || (state.selected.id === "blackHole" && ["mass", "diskRadius"].includes(control.dataset.param)) || (state.selected.visual === "meson" && ["separation", "stringTension", "constituentMass"].includes(control.dataset.param))) rebuildSpecimen();
     if (state.selected.visual === "resonantTriple" && resonantTripleParameters.includes(control.dataset.param)) renderInspector();
     if (state.selected.id === "blackHole" && state.view === "blackHoleMerger" && ["binaryCount", "binaryMassA", "binaryMassB", "binaryMassC", "spinA", "spinB", "initialSeparation", "mergerConfiguration", "inclination"].includes(control.dataset.param)) renderInspector();
     runLocalSolver();
@@ -2173,6 +3425,11 @@ document.addEventListener("input", (event) => {
   });
   $("#sourceLinks").innerHTML = model.sources.map(([label, url]) => `<a href="${url}" target="_blank" rel="noreferrer"><span>${label}</span><i data-lucide="external-link" aria-hidden="true"></i></a>`).join("");
   if (model.id === "neutrinoLens" && state.communicationOpen) renderCommunicationControls();
+  if (model.visual === "molecule") bindChemistryPanel();
+  if (model.visual === "smartMatter") bindSmartMatterPanel();
+  if (model.visual === "smartProteinRepair") bindSmartProteinRepairPanel();
+  if (model.visual === "mOrchestrator") mOrchestrator.bind();
+  if (model.visual === "biomolecule") bindBiomoleculePanel();
   window.lucide?.createIcons();
 }
 
@@ -2181,12 +3438,20 @@ function renderViewModes(model) {
   const ru = (localStorage.getItem("qcd-neutrino-language") || "en") === "ru";
   const labels = model.id === "blackHole"
     ? [["structure", "orbit", ru ? "Чёрная дыра" : "Black hole"], ["blackHoleMerger", "waves", ru ? "Симулятор слияния" : "Black-hole merger simulator"]]
+    : model.visual === "mOrchestrator"
+    ? [["structure", "orbit", ({ru:"M-аркестратор · конструктор",he:"מתזמר M · בונה",en:"M-orchestrator · constructor"})[localStorage.getItem("qcd-neutrino-language") || "en"]]]
     : model.visual === "resonantTriple"
     ? [["structure", "orbit", ru ? "Стабильная конфигурация (гипотеза)" : "Stable configuration (hypothesis)"]]
+    : model.visual === "biomolecule"
+    ? [["structure", "dna", model.biomoleculeKind === "dna" ? bioT("dna") : bioT("protein")]]
     : model.visual === "macro"
     ? [["structure", "orbit", ru ? "Объект" : "Object"]]
     : model.visual === "complexSpin"
     ? [["structure", "layers-3", ru ? "3D-проекция" : "3D projection"], ...(state.values.configuration === "lattice" ? [["passage", "scan-line", ru ? "Прохождение" : "Passage"]] : [])]
+    : model.visual === "smartMatter"
+    ? [["structure", "atom", ru ? "Сборка i→3D" : "i→3D assembly"]]
+    : model.visual === "smartProteinRepair"
+    ? [["structure", "database", ru ? "G₀ Исходный" : "G₀ Original"], ["damageGraph", "radiation", ru ? "Gᴅ Повреждённый" : "Gᴅ Damaged"], ["repairedGraph", "sparkles", ru ? "Gʀ Восстановленный" : "Gʀ Repaired"]]
     : model.visual === "polytope4d"
     ? [["structure", "layers-3", ru ? "3D-проекция" : "3D projection"]]
     : isBaryonModel(model)
@@ -2295,6 +3560,11 @@ function selectModel(id) {
   closeFormulaModal();
   if (model.id !== "neutrinoLens") $("#communicationPanel").hidden = true;
   initializeValues(model);
+  if (model.visual === "molecule") ensureChemistryState(true);
+  if (model.visual === "smartMatter") ensureSmartMatterState(true);
+  if (model.visual === "smartProteinRepair") ensureSmartProteinRepairState(true);
+  if (model.visual === "mOrchestrator") mOrchestrator.select();
+  if (model.visual === "biomolecule") ensureBiomoleculeState(model, true);
   state.interaction = null;
   state.resonantTripleRunning = false;
   state.resonantTripleStabilizerAdded = false;
@@ -2310,7 +3580,18 @@ function selectModel(id) {
   renderInspector();
   $(".inspector-panel").scrollTop = 0;
   rebuildSpecimen();
-  runLocalSolver();
+  if (model.visual === "biomolecule") {
+    state.solverResult = null;
+    void activateBiomoleculeWorkspace(model);
+  } else if (model.visual === "smartMatter") {
+    runLocalSolver();
+    void prepareSmartMatterPlan(false);
+  } else if (model.visual === "smartProteinRepair") {
+    state.solverResult = null;
+    void prepareSmartProteinRepairPlan();
+  } else {
+    runLocalSolver();
+  }
   resetCamera(false);
   setStatus("Система готова", false);
 }
@@ -2322,7 +3603,7 @@ window.addEventListener("qcd-language-change", (event) => {
 });
 
 function familyTitle(family) {
-  return ({ ordinary: "ordinary matter", dense: "dense matter", quark: "quark matter", meson: "meson spectroscopy", collider: "collider event lab", strange: "strange matter", hypothetical: "my hypotheses", macro: "macro objects", chemistry: "quantum chemistry", semiconductor: "semiconductor TCAD" })[family] || family;
+  return ({ ordinary: "ordinary matter", dense: "dense matter", quark: "quark matter", meson: "meson spectroscopy", collider: "collider event lab", strange: "strange matter", hypothetical: "my hypotheses", macro: "macro objects", chemistry: "quantum chemistry", semiconductor: "semiconductor TCAD", biomolecule: "biomolecular structures" })[family] || family;
 }
 
 function interactionLabel(model) {
@@ -2337,6 +3618,8 @@ function interactionLabel(model) {
   if (model.id === "colliderWorkbench") return "Столкнуть выбранные пучки";
   if (model.interaction === "collision") return "Столкнуть протоны";
   if (model.interaction === "quantumChemistry") return "Рассчитать электронную структуру";
+  if (model.interaction === "smartMatter") return "Создать молекулу";
+  if (model.interaction === "smartProteinRepair") return "Гамма-облучение";
   if (model.interaction === "semiconductor") return "Решить p–n-переход";
   if (model.interaction === "gpuCompute") return "Запустить GPU-расчёт";
   return "Возбудить глюонное поле";
@@ -2403,6 +3686,12 @@ function solveResonantTriplePreview(values) {
 }
 
 function runLocalSolver() {
+  if (state.selected.visual === "mOrchestrator") {
+    state.solverResult = mOrchestrator.result();
+    $("#chartSubtitle").textContent = state.solverResult.primaryLabel;
+    $("#telemetrySolver").textContent = "M-field · local integrator";
+    renderMetrics(); drawChart(); return;
+  }
   const start = performance.now();
   const collisionModel = state.collisionContext ? modelRegistry.find((model) => model.id === "colliderWorkbench") : null;
   const collisionValues = state.collisionContext ? { ...state.values, ...state.collisionContext } : state.values;
@@ -2504,9 +3793,9 @@ function formatAxis(value) {
 }
 
 function applyViewMode() {
-  fieldObjects.forEach((object) => { object.visible = true; });
+  fieldObjects.forEach((object) => { if (!object.userData.ownsVisibility) object.visible = true; });
   if (currentShell) currentShell.visible = state.view !== "field";
-  primaryParticles.forEach((object) => { object.visible = true; });
+  primaryParticles.forEach((object) => { if (!object.userData.ownsVisibility) object.visible = true; });
 }
 
 function blackHoleMergerPanel() {
@@ -2646,12 +3935,24 @@ function phaseDemoExplanation() {
 }
 
 function runInteraction() {
+  if (state.selected.visual === "mOrchestrator") { mOrchestrator.toggle(); return; }
   const matrixPassage = state.selected.visual === "complexSpin" && state.values.configuration === "lattice" && state.view === "passage";
   const phaseDemo = state.selected.visual === "complexSpin" && state.values.configuration === "lattice" && state.view === "phaseDemo";
   const collisionMode = Boolean(state.collisionContext && isBaryonModel(state.selected));
   const blackHoleMerger = state.selected.id === "blackHole" && state.view === "blackHoleMerger";
   const resonantTriple = state.selected.visual === "resonantTriple";
   const standingWaveCore = state.selected.visual === "standingWaveCore";
+  const smartMatter = state.selected.visual === "smartMatter";
+  if (smartMatter) {
+    startSmartMatterAssembly();
+    return;
+  }
+  if (state.selected.visual === "smartProteinRepair") {
+    const repair = ensureSmartProteinRepairState();
+    if (repair?.stage === "DAMAGED") releaseProteinRepairMatter();
+    else irradiateSmartProtein();
+    return;
+  }
   // The torus is continuously animated. Its primary action is therefore a
   // real transport control, not a one-shot particle interaction.
   if (standingWaveCore) {
@@ -3187,7 +4488,60 @@ function updateResonantTripleDynamics(item, dt) {
   }
 }
 
+function renderSmartAssembly(item) {
+  const smart=item.smart, frame=assemblyFrame(smart.sequence), total=frame.atoms.length;
+  item.atomMeshes.forEach((entry,index)=>{
+    const atom=frame.atoms[index], nav=atom.navigation;
+    entry.mesh.visible=atom.visible;
+    entry.mesh.userData.iPosition=atom.i;
+    entry.mesh.userData.smartState=atom.placed?'PLACED':atom.visible?'NAVIGATING':'OUTSIDE_3D';
+    entry.mesh.scale.setScalar(atom.scale);
+    entry.mesh.position.copy(item.startPoints[index]).lerp(item.targetPoints[index],nav*nav*(3-2*nav));
+    entry.material.color.copy(entry.targetMaterial.color);
+    entry.material.emissive.copy(entry.targetMaterial.emissive);
+    entry.path.visible=atom.visible&&nav>0&&nav<1;
+  });
+  let formed=0;
+  item.bonds.forEach(bond=>{
+    const a=frame.atoms[bond.a], b=frame.atoms[bond.b];
+    const progress=a.placed&&b.placed&&smart.plan.checks.valid?Math.min(a.bonding,b.bonding):0;
+    bond.entries.forEach(link=>{link.visible=progress>0;link.material.opacity=.88*progress;});
+    if(progress===1)formed++;
+  });
+  const opacity=Number(state.values.smartTargetOpacity??.18);
+  item.guide.visible=opacity>.001&&frame.phase!=='STABLE';
+  item.guide.traverse(child=>{if(child.material)child.material.opacity=opacity;});
+  // Keep only unfilled matrix slots and missing links visible during assembly.
+  item.guide.children.forEach((child,index)=>{
+    child.visible=index<total?!frame.atoms[index].placed:(()=>{
+      const [a,b]=smart.plan.constructionOrder[index-total];
+      return !(frame.atoms[a].placed&&frame.atoms[b].placed);
+    })();
+  });
+  smart.stage=frame.phase;smart.visibleAtoms=frame.visible;
+  smart.bondedAtoms=frame.placed;smart.formedBonds=formed;
+  const write=(id,value)=>{const node=$(id);if(node)node.textContent=value;};
+  write('#smartVisibleCount',`${frame.visible} / ${total}`);
+  write('#smartBondedCount',`${frame.placed} / ${total}`);
+  write('#smartBondCount',`${formed} / ${item.bonds.length}`);
+  const activeI=frame.atoms[frame.activeIndex]?.i??0;
+  smart.message=frame.phase==='READY'?`${smart.plan.formula} · каркас цели · частицы скрыты при i<0`
+    :frame.phase==='STABLE'?`${smart.plan.formula} · сборка завершена · graph PASS`
+    :`${frame.phase} · частица ${frame.activeIndex+1}/${total} · i=${activeI.toFixed(2)} · установлено ${frame.placed}/${total}`;
+  write('#smartMatterMessage',smart.message);
+  $$('.smart-stage-track span').forEach(node=>node.classList.toggle('active',node.textContent===frame.phase));
+  // DOM telemetry mirrors the actual render frame for inspection and QA.
+  Object.assign(canvas.dataset,{assemblyPhase:frame.phase,assemblyVisible:String(frame.visible),
+    assemblyPlaced:String(frame.placed),assemblyActive:String(frame.activeIndex),assemblyI:String(activeI)});
+  if(frame.phase==='STABLE'&&smart.running){
+    smart.running=false;
+    write('#runInteractionBtn span','Повторить сборку');
+  }
+  setStatus(`SMART MATTER · ${smart.message}`,smart.running);
+}
+
 function updateAnimations(time, dt) {
+  if (state.selected.visual === "mOrchestrator") { specimen.scale.set(1, 1, 1); mOrchestrator.tick(dt); return; }
   const visual = state.visual || deriveVisualState();
   const speed = (state.values.timeScale || state.values.decaySpeed || 1) * visual.motionSpeed * (state.selected.visual === "collider" ? (state.values.collisionSpeed ?? 1) : 1);
   const scaleTarget = new THREE.Vector3(
@@ -3489,6 +4843,136 @@ function updateAnimations(time, dt) {
         p.applyEuler(item.tilt);
         item.object.position.copy(p);
       }
+    } else if (item.type === "smartMatterAssembly") {
+      if (item.smart.running) {
+        advanceAssembly(item.smart.sequence, dt,
+          state.values.smartMaterialisationRate, state.values.smartAssemblyRate);
+      }
+      renderSmartAssembly(item);
+    } else if (item.type === 'gammaProteinRepair') {
+      const repair=item.repair;
+      if (!repair.running) return;
+      const elapsed=Math.max(0,time-repair.startedAt), frames=new Map();
+      item.stream.forEach(({photon,start})=>{
+        const progress=(elapsed-start)/2.5;
+        photon.visible=progress>=0&&progress<1;
+        photon.position.x=-12+24*progress;
+      });
+      let visible=0,placed=0;
+      item.entries.forEach((entry,index)=>{
+        const f=repairFrame(elapsed,index,item.entries.length,entry.particle.position.i);
+        frames.set(Number(entry.particle.targetAtom),f);
+        entry.photon.visible=entry.beam.visible=f.photonVisible;
+        entry.photon.position.set(THREE.MathUtils.lerp(-12,entry.target.x,f.photonProgress),entry.target.y,entry.target.z);
+        if (entry.original) {
+          entry.original.position.copy(entry.target);
+          entry.original.visible=!f.damaged||f.age<1.2;
+          if(f.damaged){entry.original.position.x+=f.age*5;entry.original.position.y+=Math.sin(index*2.4)*f.age;}
+        }
+        entry.replacement.userData.iPosition=f.i;
+        entry.replacement.visible=f.opacity>0;
+        entry.replacement.material.opacity=f.opacity;
+        entry.replacement.material.emissiveIntensity=f.placed?.12:.9;
+        if(f.opacity>0)visible++;if(f.placed)placed++;
+      });
+      let bonds=0;
+      item.lines.forEach(({line,a,b})=>{
+        const fa=frames.get(a),fb=frames.get(b);
+        const broken=(fa?.damaged&&!fa.placed)||(fb?.damaged&&!fb.placed);
+        line.visible=!broken;
+        if((fa||fb)&&!broken&&(!fa||fa.placed)&&(!fb||fb.placed))bonds++;
+      });
+      repair.visibleParticles=visible;repair.placedParticles=placed;repair.restoredBonds=bonds;
+      const write=(id,value)=>{const node=$(id);if(node)node.textContent=value;};
+      write('#proteinRepairVisible',`${visible} / ${item.entries.length}`);
+      write('#proteinRepairPlaced',`${placed} / ${item.entries.length}`);
+      write('#proteinRepairBonds',String(bonds));
+      const current=item.entries.map(e=>e.replacement.userData.iPosition).find(i=>i<0&&i>-.8);
+      write('#proteinRepairMessage',`γ → collision → i=${Number(current??0).toFixed(2)} → 3D · ${placed}/${item.entries.length}`);
+      setStatus(`γ SIDE BEAM · i→3D · ${placed}/${item.entries.length}`,true);
+      if(placed===item.entries.length&&elapsed>2.5+item.stream.length*.025&&!item.finished){
+        item.finished=true;repair.running=false;repair.stage='REPAIRED';state.view='repairedGraph';
+        repair.restoredBonds=repair.plan.repairPlan.brokenBondIds.length;
+        repair.message='Gʀ · graph restored; molecular dynamics NOT RUN';
+        setTimeout(()=>{if(state.smartProteinRepair===repair&&state.selected.visual==='smartProteinRepair'){rebuildSpecimen();renderInspector();}},0);
+      }
+    } else if (item.type === "smartProteinRepair") {
+      const repair = item.repair;
+      if (!repair.running) return;
+      const elapsed = Math.max(0, time - Number(repair.startedAt || time));
+      const entries = item.entries;
+      const appearStart = .45;
+      const appearStagger = .28;
+      const navigationStart = 1.15;
+      const navigationDuration = 3.1;
+      const finishAt = navigationStart + navigationDuration + Math.max(0, entries.length - 1) * .18 + .75;
+      let visible = 0;
+      let placed = 0;
+      entries.forEach((entry, index) => {
+        const appearAt = appearStart + index * appearStagger;
+        const iProgress = clamp((elapsed - (appearAt - .35))/.35, 0, 1);
+        entry.mesh.userData.iPosition = THREE.MathUtils.lerp(Number(entry.particle.position.i), 0, iProgress);
+        entry.mesh.visible = elapsed >= appearAt;
+        if (!entry.mesh.visible) { entry.path.visible = false; return; }
+        visible += 1;
+        const navStart = navigationStart + index * .18;
+        const progress = clamp((elapsed - navStart)/navigationDuration, 0, 1);
+        const eased = progress*progress*(3-2*progress);
+        entry.mesh.position.copy(entry.start).lerp(entry.target, eased);
+        entry.mesh.position.y += Math.sin(progress*Math.PI)*(.35 + index*.025);
+        entry.path.visible = progress > 0 && progress < 1;
+        if (entry.ghost) entry.ghost.visible = progress < .94;
+        entry.mesh.userData.smartState = progress >= 1 ? "BONDED" : progress > 0 ? "NAVIGATING" : "ASSIGNED";
+        if (progress >= 1) placed += 1;
+      });
+      const bondProgress = clamp((elapsed - navigationStart - navigationDuration*.72)/1.2, 0, 1);
+      item.brokenLines.forEach((line) => {
+        line.material.opacity = .72 - bondProgress*.18;
+        line.material.color.setHex(bondProgress >= .98 ? 0xb8d9df : 0xff4f78);
+      });
+      repair.visibleParticles = visible;
+      repair.placedParticles = placed;
+      repair.restoredBonds = Math.round(item.brokenLines.length*bondProgress);
+      const visibleOut = $("#proteinRepairVisible"); if (visibleOut) visibleOut.textContent = `${visible} / ${entries.length}`;
+      const placedOut = $("#proteinRepairPlaced"); if (placedOut) placedOut.textContent = `${placed} / ${entries.length}`;
+      const bondsOut = $("#proteinRepairBonds"); if (bondsOut) bondsOut.textContent = `${repair.restoredBonds} / ${item.brokenLines.length}`;
+      const message = $("#proteinRepairMessage");
+      if (message) message.textContent = `i→3D ${visible}/${entries.length} · atoms ${placed}/${entries.length} · bonds ${repair.restoredBonds}/${item.brokenLines.length}`;
+      setStatus(`SMART MATTER REPAIR · ${placed}/${entries.length} atoms · ${repair.restoredBonds}/${item.brokenLines.length} bonds`, true);
+      if (elapsed >= finishAt && !item.finished) {
+        item.finished = true;
+        repair.running = false;
+        repair.stage = "REPAIRED";
+        state.view = "repairedGraph";
+        repair.message = `Gʀ · topology ${repair.plan.validation.topologyMatchPercent.toFixed(0)}% · dynamic validation NOT RUN`;
+        setTimeout(() => {
+          if (state.selected.visual !== "smartProteinRepair") return;
+          rebuildSpecimen();
+          renderInspector();
+          setStatus(`PROTEIN REPAIR COMPLETE · ${repair.message}`, false);
+        }, 0);
+      }
+    } else if (item.type === "chemistryReaction") {
+      const elapsed = Math.max(0, time - Number(item.startedAt || time));
+      const progress = item.chemistry.reaction?.running ? clamp(elapsed / 6.2, 0, 1) : 1;
+      const eased = progress * progress * (3 - 2 * progress);
+      item.atomMeshes.forEach((mesh, index) => mesh.position.copy(item.fromPoints[index]).lerp(item.toPoints[index], eased));
+      const updateBond = (entry) => {
+        const start = item.atomMeshes[entry.a].position.clone().add(entry.shift);
+        const end = item.atomMeshes[entry.b].position.clone().add(entry.shift);
+        orientCylinderBetween(entry.object, start, end);
+      };
+      item.reactantBonds.forEach(updateBond);
+      item.productBonds.forEach(updateBond);
+      item.reactantMaterial.opacity = .82 * clamp(1 - progress * 2.05, 0, 1);
+      item.productMaterial.opacity = .86 * clamp((progress - .43) * 2.05, 0, 1);
+      if (progress >= 1 && item.chemistry.reaction?.running) {
+        item.chemistry.reaction.running = false;
+        item.chemistry.message = `Реакция завершена · ${item.chemistry.reaction.equation}`;
+        setStatus(item.chemistry.message, false);
+      } else if (item.chemistry.reaction?.running) {
+        setStatus(`RDKit REACTION · ${item.chemistry.reaction.equation} · ${(progress * 100).toFixed(0)}%`, true);
+      }
     } else if (item.type === "jitter") {
       const amplitude = .014 + .055 * visual.motionAmplitude * (1 - visual.coherence * .55);
       item.object.position.copy(item.base).add(new THREE.Vector3(Math.sin(t * .7 + item.phase), Math.cos(t * .63 + item.phase * 1.3), Math.sin(t * .52 + item.phase * .7)).multiplyScalar(amplitude));
@@ -3504,6 +4988,10 @@ function updateAnimations(time, dt) {
       const modulation = .65 + visual.wave * .9;
       const amplitude = .018 + .052 * visual.motionAmplitude;
       item.object.position.copy(item.base).add(new THREE.Vector3(Math.sin(t * 1.8 + item.phase * modulation), Math.cos(t * 1.5 + item.phase), Math.sin(t * 1.3 + item.phase * modulation)).multiplyScalar(amplitude));
+    } else if (item.type === "pulse") {
+      const pulse = 1 + Math.sin(t * item.speed + item.phase) * .1;
+      item.object.scale.setScalar(pulse);
+      if (item.object.material) item.object.material.opacity = .24 + (Math.sin(t * item.speed + item.phase) + 1) * .12;
     } else if (item.type === "ring") {
       item.object.rotation.y += dt * item.speed;
       item.object.rotation.z += dt * item.speed * .45;
@@ -4146,6 +5634,7 @@ function downloadMultiQuarkSystemVerilog() {
 }
 
 async function runBackendSolver() {
+  if (state.selected.visual === "mOrchestrator") { runLocalSolver(); setStatus("M-field · local numerical hypothesis model", false); return; }
   const button = $("#backendSolveBtn");
   if (!state.backendOnline) {
     setStatus("Backend не запущен · использован browser solver", false);
@@ -4155,7 +5644,21 @@ async function runBackendSolver() {
   button.disabled = true;
   setStatus("BACKEND · расчёт модели", true);
   try {
-    const response = await fetch("./api/solve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: state.selected.id, values: state.values }) });
+    const solverValues = { ...state.values };
+    if (state.selected.visual === "molecule") {
+      const chemistry = ensureChemistryState();
+      solverValues.chemistryAction = "quantum";
+      if (chemistry?.original?.smiles) {
+        solverValues.customSmiles = chemistry.original.smiles;
+        solverValues.customName = chemistry.original.molecule || "Custom molecule";
+      } else if (!chemistry?.smilesInput?.trim() && chemistry?.draft?.atoms?.length) {
+        solverValues.customGraph = chemistry.draft;
+        solverValues.customName = "Graph editor molecule";
+      } else if (chemistry?.smilesInput?.trim()) {
+        solverValues.customSmiles = chemistry.smilesInput.trim();
+      }
+    }
+    const response = await fetch("./api/solve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: state.selected.id, values: solverValues }) });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "Backend error");
     state.solverResult = payload.result;
@@ -4175,6 +5678,8 @@ async function runBackendSolver() {
 }
 
 function resetCamera(immediate = true) {
+  if (state.selected.visual === "mOrchestrator") { mOrchestrator.fitCamera(); return; }
+  controls.maxDistance = 34;
   const target = new THREE.Vector3(0, .3, 0);
   const position = state.selected.visual === "neutrinoLens" ? new THREE.Vector3(11, 5.5, 13.5) : state.selected.visual === "collider" ? new THREE.Vector3(13.5, 9.2, 15.5) : new THREE.Vector3(10.5, 6.2, 12.5);
   if (immediate) {
@@ -4197,12 +5702,12 @@ function resize() {
 
 function animate() {
   requestAnimationFrame(animate);
-  const dt = Math.min(clock.getDelta(), .04);
+  const dt = Math.min(clock.getDelta(), state.selected.visual === "mOrchestrator" ? .25 : .04);
   const time = clock.elapsedTime;
   if (!state.paused) {
     updateAnimations(time, dt);
     platformRing.material.opacity = .48 + Math.sin(time * 1.2) * .09;
-  }
+  } else if (state.selected.visual === "mOrchestrator") mOrchestrator.tick(0);
   controls.update();
   renderer.render(scene, camera);
 }
@@ -4338,19 +5843,21 @@ $("#mqCopySvBtn").addEventListener("click", async () => {
   $("#mqCopySvBtn").textContent = "Скопировано";
   setTimeout(() => { $("#mqCopySvBtn").textContent = "Копировать"; }, 1200);
 });
-$("#resetParamsBtn").addEventListener("click", () => { initializeValues(state.selected); renderInspector(); rebuildSpecimen(); runLocalSolver(); applyParameterDrivenVisuals(); });
+$("#resetParamsBtn").addEventListener("click", () => { if (state.selected.visual === "mOrchestrator") { mOrchestrator.reset(); return; } initializeValues(state.selected); renderInspector(); rebuildSpecimen(); runLocalSolver(); applyParameterDrivenVisuals(); });
 $("#closeComponentPopover").addEventListener("click", hideComponentInfo);
 canvas.addEventListener("pointerdown", (event) => { pointerStart = { x: event.clientX, y: event.clientY }; });
 canvas.addEventListener("pointerup", (event) => {
   if (!pointerStart) return;
   const moved = Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y);
   pointerStart = null;
+  if (moved <= 5 && state.selected.visual === "mOrchestrator" && mOrchestrator.mapClick(event)) return;
   if (moved <= 5) pickSceneComponent(event);
 });
 $("#pauseBtn").addEventListener("click", () => {
   state.paused = !state.paused;
   $("#pauseBtn").innerHTML = `<i data-lucide="${state.paused ? "play" : "pause"}"></i>`;
   $("#pauseBtn").setAttribute("aria-label", state.paused ? "Продолжить" : "Пауза");
+  if (state.selected.visual === "mOrchestrator") mOrchestrator.tick(0);
   window.lucide?.createIcons();
 });
 $("#resetViewBtn").addEventListener("click", () => resetCamera(true));
@@ -4359,6 +5866,10 @@ $("#viewModes").addEventListener("click", (event) => {
   const button = event.target.closest("button[data-view]");
   if (!button) return;
   state.view = button.dataset.view;
+  if (state.selected.visual === "smartProteinRepair") {
+    setProteinGraphState(state.view === "damageGraph" ? "DAMAGED" : state.view === "repairedGraph" ? "REPAIRED" : "ORIGINAL");
+    return;
+  }
   if (state.view === "blackHoleMerger") window.dispatchEvent(new Event("qcd-black-hole-merger-view"));
   $$("#viewModes button").forEach((item) => item.classList.toggle("active", item === button));
   applyViewMode();
@@ -4421,6 +5932,11 @@ renderCatalog();
 renderInspector();
 rebuildSpecimen();
 runLocalSolver();
+const requestedModel = new URLSearchParams(location.search).get("model");
+if (requestedModel === "resonantTripleBlackHole") {
+  state.family = "hypothetical";
+  selectModel(requestedModel);
+}
 resize();
 checkBackend();
 window.addEventListener("load", () => window.lucide?.createIcons());

@@ -16,7 +16,8 @@
     }
   </script>
   <script src="../assets/vendor/lucide.min.js" defer></script>
-  <link rel="stylesheet" href="./styles.css?v=20260904-discovery-chain">
+  <link rel="stylesheet" href="./vendor/molstar/molstar.css?v=5.4.2">
+  <link rel="stylesheet" href="./styles.css?v=20260905-public2">
 </head>
 <body>
   <div class="app-shell">
@@ -68,6 +69,23 @@
 
       <section class="stage-panel" aria-label="Трёхмерная сцена">
         <canvas id="scene" aria-label="Интерактивная трёхмерная модель выбранной материи"></canvas>
+        <section id="biomoleculePanel" class="biomolecule-panel" hidden aria-label="Интерактивный просмотр биомолекул Mol*">
+          <div class="biomolecule-external-controls" role="group" aria-label="Представление молекулы">
+            <button id="bioSchematicViewBtn" type="button" class="active" aria-pressed="true"><i data-lucide="route"></i><span>Схематическая</span></button>
+            <button id="bioMolecularViewBtn" type="button" aria-pressed="false"><i data-lucide="atom"></i><span>Молекулярная</span></button>
+          </div>
+          <div id="molstarViewer" class="molstar-viewer"></div>
+          <div class="biomolecule-viewer-ribbon">
+            <span id="biomoleculeViewerSource">MOL* · LOCAL MIT BUILD</span>
+            <strong id="biomoleculeViewerTitle">Structure workspace</strong>
+            <small id="biomoleculeViewerMeta">Select PDB, AlphaFold DB or a local structure file</small>
+          </div>
+          <div id="biomoleculeViewerFallback" class="biomolecule-viewer-fallback" hidden>
+            <i data-lucide="dna"></i>
+            <strong>Mol* viewer is loading</strong>
+            <span>The sequence tools remain available in the inspector.</span>
+          </div>
+        </section>
         <div class="stage-toolbar">
           <div id="viewModes" class="segmented" aria-label="Режим отображения">
             <button type="button" data-view="structure" class="active"><i data-lucide="orbit"></i> Структура</button>
@@ -244,7 +262,8 @@
     </div>
   </div>
 
-<script type="module" src="./app.js?v=20260904-cloud-grover"></script>
+<script src="./vendor/molstar/molstar.js?v=5.4.2"></script>
+<script type="module" src="./app.js?v=20260905-sequential1"></script>
 <script src="./language.js?v=20260903-directml-quantum"></script>
 </body>
 </html>

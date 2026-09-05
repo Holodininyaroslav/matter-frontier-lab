@@ -521,3 +521,105 @@ input[type="range"] { width: 100%; height: 4px; margin: 0; accent-color: var(--c
 .communication-bit-panel{display:grid;gap:5px;padding:10px;margin:10px 0;border:1px solid var(--line);border-radius:8px;background:#06151e}.communication-bit-panel span{font-size:10px;color:var(--cyan);text-transform:uppercase;letter-spacing:.08em}.communication-bit-panel code{display:block;max-height:44px;overflow:auto;overflow-wrap:anywhere;color:#f6d36a;font-size:11px;line-height:1.35}.communication-bit-panel b{min-height:18px;color:var(--text);font-size:13px}
 .quantum-gpu-panel{margin-top:12px;padding:14px;border:1px solid #315a7c;border-radius:8px;background:linear-gradient(145deg,#0a1726,#08131c)}.quantum-gpu-panel>span{color:#71c8ff;font:700 10px var(--mono);letter-spacing:.08em}.quantum-gpu-panel p{color:#91aeb9;font-size:11px;line-height:1.45}.quantum-gpu-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:10px 0}.quantum-gpu-kpis div{padding:8px;border:1px solid #1c3c54;background:#06111b}.quantum-gpu-kpis small{display:block;color:#6f929e;text-transform:uppercase;font-size:8px}.quantum-gpu-kpis b{display:block;margin-top:3px;color:#e0f7ff;font:11px var(--mono)}.quantum-gpu-panel ul{list-style:none;margin:8px 0 0;padding:0}.quantum-gpu-panel li{display:grid;grid-template-columns:1fr auto auto;gap:8px;padding:6px 0;border-top:1px solid #153242;align-items:center}.quantum-gpu-panel li code{color:#a7e6ff}.quantum-gpu-panel li b{color:#6be0a2;font:10px var(--mono)}.quantum-gpu-panel li small{color:#6f8b94;font:9px var(--mono)}
 .quantum-cloud-demo{margin-top:14px;padding:12px;border:1px solid #2d7268;border-radius:7px;background:linear-gradient(145deg,rgba(10,41,45,.88),rgba(5,20,28,.95))}.quantum-cloud-demo>span{color:#5ff1cf;font:700 9px var(--mono);letter-spacing:.09em}.quantum-cloud-demo h4{margin:7px 0 2px;color:#effffd;font-size:13px}.quantum-cloud-demo p{margin:6px 0 10px}.quantum-cloud-actions{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px}.quantum-cloud-actions .solver-btn{padding:7px 9px;font-size:9px}.quantum-cloud-demo details{margin-top:6px;border:1px solid #1d4a4d;background:#061319}.quantum-cloud-demo summary{cursor:pointer;padding:8px;color:#8bd9d1;font:10px var(--mono)}.quantum-cloud-demo pre{max-height:230px;margin:0;padding:9px;overflow:auto;border-top:1px solid #1d4a4d;color:#c9f3ee;background:#030b10;font:9px/1.45 var(--mono);white-space:pre}.quantum-cloud-demo>small{display:block;margin-top:9px;color:#7e9ea4;font:9px/1.4 var(--mono)}
+.chemistry-workbench{display:grid;gap:9px;margin-top:14px;padding:12px;border:1px solid #2b7180;border-left:2px solid var(--cyan);border-radius:8px;background:linear-gradient(145deg,#071820,#08131b)}
+.chemistry-workbench>header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.chemistry-workbench>header div{display:grid;gap:4px}.chemistry-workbench>header span{color:var(--cyan);font:700 8px/1.2 var(--mono);letter-spacing:.08em}.chemistry-workbench>header strong{font-size:13px}.chemistry-workbench .chem-engine{padding:4px 6px;border:1px solid #2b7180;border-radius:4px;color:#68e1a4;background:#06141a;white-space:nowrap}
+.chemistry-workbench details{border:1px solid var(--line);border-radius:6px;background:#06131a}.chemistry-workbench summary{padding:9px 10px;cursor:pointer;color:#d7eef1;font-size:11px;font-weight:700}.chemistry-workbench details>p{margin:0;padding:0 10px 9px;color:#8ca5aa;font-size:9px;line-height:1.4}.chemistry-workbench details>*:not(summary){margin-left:10px;margin-right:10px}.chemistry-workbench select,.chemistry-workbench input{min-width:0;border:1px solid var(--line);border-radius:4px;background:#041017;color:var(--text);font:10px var(--mono)}.chemistry-workbench select{height:30px;padding:0 6px}.chemistry-workbench input{height:31px;padding:0 8px}
+.chem-tool-row{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-bottom:7px}.chem-tool-row button{height:27px;border:1px solid var(--line);border-radius:4px;background:#0a1b23;color:#dbeaec;font:700 10px var(--mono);cursor:pointer}.chem-tool-row button:hover,.chem-tool-row button.active{border-color:var(--cyan);color:#071015;background:var(--cyan)}
+.chem-bond-row{display:grid;grid-template-columns:1fr auto auto;gap:5px;align-items:end;margin-bottom:7px}.chem-bond-row label{display:grid;gap:4px;color:var(--muted);font-size:9px}.chem-bond-row .solver-btn{padding:0 6px;white-space:nowrap}
+.chem-editor-canvas{display:block;width:calc(100% - 20px);height:164px;margin-top:6px;margin-bottom:8px;border:1px solid #204553;border-radius:6px;background-color:#041018;background-image:linear-gradient(#0f2731 1px,transparent 1px),linear-gradient(90deg,#0f2731 1px,transparent 1px);background-size:14px 14px;cursor:crosshair}.chem-editor-atom{cursor:pointer}.chem-editor-atom circle{stroke:#061016;stroke-width:2}.chem-editor-atom text{fill:#061016;font:700 10px var(--mono);pointer-events:none}.chem-editor-atom.selected circle{stroke:#f4d467;stroke-width:3;filter:drop-shadow(0 0 5px #f4d467)}
+.chem-smiles{display:grid;gap:5px;color:var(--muted);font-size:9px}.chem-smiles input{width:100%}.chem-wide{width:calc(100% - 20px);margin-top:8px;margin-bottom:10px}.chem-wide[disabled],.chem-actions button[disabled],.chem-library-row button[disabled]{opacity:.45;cursor:wait}
+.chem-library-row{display:grid;grid-template-columns:1fr auto;gap:6px}.chem-library-row select{width:100%}.chem-chips{display:flex;flex-wrap:wrap;gap:5px;min-height:25px;margin-top:7px!important;margin-bottom:8px!important}.chem-chips>small{color:var(--muted);font-size:9px}.chem-chip{padding:5px 7px;border:1px solid #285765;border-radius:999px;background:#0b2029;color:#bce5ea;font-size:9px;cursor:pointer}.chem-chip:hover{border-color:#ef6d77;color:#ffd6da}.chem-chip b{margin-left:3px}
+.chem-reaction-select{display:grid;gap:5px;color:var(--muted);font-size:9px}.chem-reaction-select select{width:100%}.chem-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px!important}.chem-actions .primary-action,.chem-actions .solver-btn{width:100%;height:32px;padding:0 7px}.chem-reaction-result{display:grid;gap:5px;margin-top:9px!important;padding:9px;border-left:2px solid #f3c862;background:#091a20}.chem-reaction-result b{color:#f4d57b;font:11px var(--mono)}.chem-reaction-result span{color:#b7c9cc;font-size:9px;line-height:1.4}.chem-reaction-result small{color:#7f969b;font-size:8px;line-height:1.35}.chem-message{margin-top:8px!important;padding:7px;border:1px solid #1c4451;color:#76dce8;background:#05141a;font:9px/1.35 var(--mono)}.chem-boundary{display:block;margin-top:7px!important;margin-bottom:9px!important;color:#768e94;font-size:8px;line-height:1.4}
+@media(max-width:1260px){.chem-tool-row{grid-template-columns:repeat(4,1fr)}.chem-bond-row{grid-template-columns:1fr 1fr}.chem-bond-row label{grid-column:1/-1}.chem-actions{grid-template-columns:1fr}}
+
+/* Biomolecular workspace: Mol* is vendored locally under its MIT licence. */
+.biomolecule-panel[hidden]{display:none!important}.biomolecule-panel{position:absolute;inset:0 0 52px;z-index:3;overflow:hidden;background:#030a0f}.molstar-viewer{position:absolute;inset:0;direction:ltr}.molstar-viewer>.msp-plugin{position:absolute;inset:0}.stage-panel.biomolecule-mode:after{display:none}.stage-panel.biomolecule-mode>#scene,.stage-panel.biomolecule-mode>.stage-toolbar,.stage-panel.biomolecule-mode>.scene-label,.stage-panel.biomolecule-mode>.interaction-status,.stage-panel.biomolecule-mode>.axis-hint{display:none!important}.biomolecule-inspector .solver-section{display:none}
+.biomolecule-external-controls{position:absolute;z-index:20;top:12px;left:50%;display:flex;gap:4px;padding:4px;transform:translateX(-50%);border:1px solid #2a6674;border-radius:8px;background:#04131bea;box-shadow:0 8px 24px #0009;direction:ltr}.biomolecule-external-controls button{display:flex;align-items:center;gap:6px;min-height:32px;padding:0 11px;border:1px solid transparent;border-radius:5px;background:transparent;color:#91abb1;font:700 9px var(--mono);white-space:nowrap;cursor:pointer}.biomolecule-external-controls button svg{width:14px;height:14px}.biomolecule-external-controls button:hover{color:#e8f9fb;border-color:#245361}.biomolecule-external-controls button.active{color:#031016;border-color:var(--cyan);background:var(--cyan);box-shadow:0 0 16px #3cd5e54d}.biomolecule-external-controls button:disabled{opacity:.55;cursor:wait}
+.biomolecule-viewer-ribbon{position:absolute;z-index:12;left:15px;bottom:14px;max-width:min(520px,calc(100% - 30px));padding:10px 13px;border:1px solid #296575;border-left:3px solid var(--cyan);border-radius:6px;background:#041017dc;box-shadow:0 10px 28px #0009;pointer-events:none}.biomolecule-viewer-ribbon span,.biomolecule-viewer-ribbon strong,.biomolecule-viewer-ribbon small{display:block}.biomolecule-viewer-ribbon span{color:var(--cyan);font:700 8px var(--mono);letter-spacing:.09em}.biomolecule-viewer-ribbon strong{margin-top:4px;color:#f0fbfc;font-size:13px}.biomolecule-viewer-ribbon small{margin-top:3px;color:#90a9ae;font-size:9px}.biomolecule-viewer-fallback{position:absolute;inset:0;z-index:14;display:grid;place-content:center;justify-items:center;gap:8px;background:#031017;color:#91aab0;text-align:center}.biomolecule-viewer-fallback[hidden]{display:none}.biomolecule-viewer-fallback svg{width:34px;height:34px;color:var(--cyan)}.biomolecule-viewer-fallback strong{color:#e6f8fa;font-size:15px}.biomolecule-viewer-fallback span{font-size:11px}
+.biomolecule-workbench{display:grid;gap:9px;margin-top:2px;padding:12px;border:1px solid #2b7180;border-left:2px solid var(--cyan);border-radius:8px;background:linear-gradient(145deg,#071820,#08131b)}.biomolecule-workbench>header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.biomolecule-workbench>header div{display:grid;gap:4px}.biomolecule-workbench>header span{color:var(--cyan);font:700 8px/1.3 var(--mono);letter-spacing:.08em}.biomolecule-workbench>header strong{font-size:13px}.biomolecule-workbench .bio-engine{padding:4px 6px;border:1px solid #2b7180;border-radius:4px;color:#68e1a4;background:#06141a;white-space:nowrap}.biomolecule-workbench details{border:1px solid var(--line);border-radius:6px;background:#06131a}.biomolecule-workbench summary{padding:9px 10px;cursor:pointer;color:#d7eef1;font-size:11px;font-weight:700}.biomolecule-workbench details>*:not(summary){margin-left:10px;margin-right:10px}.biomolecule-workbench textarea,.biomolecule-workbench input,.biomolecule-workbench select{width:100%;min-width:0;border:1px solid #23505c;border-radius:5px;background:#031017;color:#dff5f7;font:10px/1.45 var(--mono)}.biomolecule-workbench textarea{display:block;resize:vertical;padding:8px}.biomolecule-workbench input,.biomolecule-workbench select{height:31px;padding:0 7px}.bio-inline{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px!important;margin-bottom:8px!important}.bio-inline label,.bio-source-row label,.bio-full,.bio-protein,.bio-file{display:grid;gap:4px;color:#829da3;font-size:9px}.bio-actions .primary-action,.bio-actions .solver-btn{width:100%;height:32px;padding:0 7px;font-size:9px}.bio-actions button[disabled],.bio-source-row button[disabled],.bio-full[disabled]{opacity:.45;cursor:wait}.bio-full{width:calc(100% - 20px)!important;margin-top:7px!important;margin-bottom:7px!important}.bio-protein{margin-top:9px!important;margin-bottom:10px!important}.bio-protein textarea{color:#8be8b2;background:#04140f}.bio-source-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;align-items:end;margin-top:8px!important;margin-bottom:8px!important}.bio-source-row .solver-btn{height:31px;padding:0 8px;font-size:9px;white-space:nowrap}.bio-file{margin-top:9px!important;margin-bottom:10px!important}.bio-file input{height:auto;padding:7px}.bio-af-result{display:grid;grid-template-columns:1fr auto;gap:4px 8px;margin-top:9px!important;padding:9px;border-left:2px solid #69dba0;background:#071a18}.bio-af-result b{color:#bdf8d4;font:11px var(--mono)}.bio-af-result span{color:#b7c9cc;font-size:9px}.bio-af-result small{color:#7f969b;font-size:8px}.bio-af-result a{grid-column:2;grid-row:1/3;color:#6ddced;font-size:9px;text-decoration:none}.bio-provider{display:grid;grid-template-columns:1fr auto;gap:3px 8px;padding:8px 0;margin:0 10px!important;border-bottom:1px solid #15323b}.bio-provider span{color:#cfe8eb;font-size:10px}.bio-provider b{font:700 8px var(--mono);text-transform:uppercase}.bio-provider b.ready{color:#68e1a4}.bio-provider b.off{color:#f1b85d}.bio-provider small{grid-column:1/-1;color:#718b91;font-size:8px;overflow-wrap:anywhere}.bio-boundary{display:block;margin-top:8px!important;margin-bottom:9px!important;color:#7f969b;font-size:8px;line-height:1.45}.bio-message{padding:8px;border:1px solid #1c4451;color:#76dce8;background:#05141a;font:9px/1.4 var(--mono);overflow-wrap:anywhere}.biomolecule-workbench[dir=rtl] details,.biomolecule-workbench[dir=rtl] header{text-align:right}
+@media(max-width:1260px){.bio-inline{grid-template-columns:1fr}.bio-source-row{grid-template-columns:1fr}.bio-source-row .solver-btn{width:100%}}
+.smart-matter-workbench {
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid rgba(61, 212, 231, .36);
+  border-radius: 8px;
+  background: linear-gradient(145deg, rgba(5, 24, 31, .94), rgba(11, 16, 29, .96));
+  box-shadow: inset 0 1px rgba(255,255,255,.025);
+}
+
+.smart-matter-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.smart-matter-head > div { display:grid; gap:5px; }
+.smart-matter-head span, .smart-science-split span { color:#38d8ea; font:700 11px/1.2 "Consolas", monospace; letter-spacing:.11em; }
+.smart-matter-head strong { color:#effcff; font-size:17px; }
+.smart-matter-head > b { padding:5px 8px; border:1px solid rgba(242,191,91,.45); border-radius:4px; color:#f2bf5b; font:700 10px/1.1 "Consolas", monospace; white-space:nowrap; }
+.smart-matter-head > b.pass { border-color:rgba(83,232,165,.62); color:#53e8a5; }
+
+.smart-stage-track { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:5px; margin:13px 0; }
+.smart-stage-track span { min-width:0; padding:5px 3px; border:1px solid rgba(107,148,159,.28); border-radius:3px; color:#68848c; text-align:center; font:700 9px/1 "Consolas", monospace; }
+.smart-stage-track span.active { color:#061016; border-color:#65e8f3; background:#65e8f3; box-shadow:0 0 16px rgba(61,212,231,.24); }
+
+.smart-counters { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); border:1px solid rgba(80,126,138,.24); }
+.smart-counters > div { display:grid; gap:4px; padding:9px; border-right:1px solid rgba(80,126,138,.24); }
+.smart-counters > div:last-child { border-right:0; }
+.smart-counters span { color:#8099a0; font-size:10px; }
+.smart-counters b { color:#eafcff; font:700 13px/1.2 "Consolas", monospace; }
+
+.smart-science-split { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:10px 0; }
+.smart-science-split > div { padding:9px; border-left:2px solid #3dd4e7; background:rgba(4,15,21,.62); }
+.smart-science-split > div:last-child { border-left-color:#ee72d5; }
+.smart-science-split p { margin:5px 0 0; color:#a9c4ca; font-size:11px; line-height:1.45; }
+.smart-actions { display:flex; flex-wrap:wrap; gap:7px; }
+.protein-repair-workbench { border-color:rgba(238,114,213,.42); background:linear-gradient(145deg,rgba(18,16,34,.97),rgba(5,22,29,.97)); }
+.protein-graph-switch { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; margin:12px 0 7px; }
+.protein-graph-switch button { min-height:30px; padding:5px 6px; border:1px solid #294c58; border-radius:4px; color:#8da8ae; background:#07151d; font:700 9px/1.2 "Consolas",monospace; cursor:pointer; }
+.protein-graph-switch button:hover,.protein-graph-switch button.active { border-color:#ee72d5; color:#fff; background:#381536; }
+.protein-graph-switch button:disabled { opacity:.4; cursor:wait; }
+.protein-repair-track { grid-template-columns:repeat(4,minmax(0,1fr)); }
+.protein-repair-workbench details { margin-top:9px; border:1px solid rgba(69,110,121,.32); border-radius:5px; background:#051219; }
+.protein-repair-workbench summary { padding:8px 9px; color:#bcebf0; font:700 10px "Consolas",monospace; cursor:pointer; }
+.protein-report-grid { display:grid; grid-template-columns:1fr 1fr; gap:1px; margin:0 8px 8px; background:#19323b; }
+.protein-report-grid span { display:flex; justify-content:space-between; gap:8px; padding:7px; color:#78959c; background:#07151c; font-size:9px; }
+.protein-report-grid b { color:#ecfbfc; font:700 10px "Consolas",monospace; }
+.protein-elements { margin:0 8px 8px; color:#d28ccc; font:9px/1.4 "Consolas",monospace; }
+.protein-validation { display:grid; gap:4px; margin:9px 0; padding:9px; border-left:2px solid #5de39d; background:#071a18; }
+.protein-validation.incomplete { border-left-color:#f2bf5b; background:#19170e; }
+.protein-validation b { color:#7cebb0; font:700 10px "Consolas",monospace; letter-spacing:.08em; }
+.protein-validation.incomplete b { color:#f2bf5b; }
+.protein-validation span { color:#d9eff1; font-size:10px; }
+.protein-validation small { color:#8da2a6; font-size:8px; line-height:1.4; }
+.protein-actions button { flex:1 1 132px; min-height:30px; justify-content:center; font-size:9px; }
+.protein-actions button[disabled] { opacity:.45; cursor:wait; }
+
+@media (max-width: 720px) {
+  .smart-counters, .smart-science-split, .protein-report-grid { grid-template-columns:1fr; }
+  .smart-counters > div { border-right:0; border-bottom:1px solid rgba(80,126,138,.24); }
+}
+.m-orch-panel { display:grid; gap:14px; padding:16px; border:1px solid #38cbdc; border-radius:10px; background:linear-gradient(145deg,#0d2530,#07131c); }
+.m-orch-panel h3 { margin:0; color:#a2f4ff; font-size:17px; }
+.m-orch-panel p { margin:0; line-height:1.5; font-size:12px; }
+.m-orch-panel label { display:grid; gap:8px; font-size:12px; }
+.m-orch-panel select { width:100%; min-width:0; padding:9px; background:#081a24; color:#e3fbff; border:1px solid #32566a; border-radius:5px; }
+.m-orch-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.m-orch-panel .m-orch-check { display:flex; align-items:center; gap:9px; cursor:pointer; }
+.m-orch-check input { width:auto; accent-color:#e090ff; }
+.m-orch-slider { grid-template-columns:1fr auto; align-items:center; }
+.m-orch-slider input { grid-column:1 / -1; width:100%; accent-color:#66e2f2; }
+.m-orch-slider output { font-family:monospace; color:#d3a7ff; }
+.m-orch-panel details { min-width:0; border-top:1px solid #29424f; padding-top:10px; }
+.m-orch-panel summary { cursor:pointer; font-size:12px; margin-bottom:10px; }
+.m-orch-table-scroll { overflow:auto; max-width:100%; }
+.m-orch-editor,.m-orch-pairs { width:100%; border-collapse:collapse; font-size:11px; font-variant-numeric:tabular-nums; }
+.m-orch-editor { min-width:410px; direction:ltr; }
+.m-orch-panel td,.m-orch-panel th { padding:6px 3px; text-align:start; border-bottom:1px solid #203945; }
+.m-orch-editor input { width:56px; padding:5px 2px; color:#d4f6ff; background:#091923; border:1px solid #335565; border-radius:3px; }
+.m-orch-editor button { background:#241c2b; color:#ffb0c3; border:1px solid #73526c; cursor:pointer; }
+.m-orch-stats { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:12px; }
+.m-orch-stats span { padding:8px; background:#0a1b25; border:1px solid #244656; border-radius:5px; font-size:10px; color:#9cb8c5; }
+.m-orch-stats b { display:block; font:600 15px monospace; color:#d7f6ff; margin-top:5px; }
+.m-orch-lit { color:#efa0ff; }
+.m-orch-legend { display:flex; gap:14px; color:#64bdd1; }
+.m-orch-legend span:last-child { color:#ed8eff; }
+.m-orch-alert { color:#ff9c86; }
+.m-orch-caption { color:#8fa8b4; }
+.m-orch-scope { color:#bac3dc; border-inline-start:2px solid #b58ae5; padding-inline-start:10px; }
+.m-orch-panel pre { white-space:pre-wrap; overflow-wrap:anywhere; color:#c3a3e9; font-size:10px; max-height:220px; overflow:auto; }
