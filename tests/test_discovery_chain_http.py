@@ -10,11 +10,15 @@ from scientific_backend.discovery_chain import DiscoveryChain
 
 
 def _request(base: str, path: str, payload: dict | None = None) -> dict:
+    headers = {"Content-Type": "application/json"}
+    if payload is not None:
+        with urllib.request.urlopen(base + "/api/security-token", timeout=10) as response:
+            headers["X-Local-CSRF"] = json.load(response)["token"]
     body = None if payload is None else json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
         base + path,
         data=body,
-        headers={"Content-Type": "application/json"} if body else {},
+        headers=headers,
         method="POST" if body is not None else "GET",
     )
     with urllib.request.urlopen(request, timeout=30) as response:

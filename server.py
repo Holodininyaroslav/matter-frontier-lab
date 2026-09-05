@@ -9,6 +9,7 @@ from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from local_security import SecureLocalMixin, BoundedHTTPServer
 
 from scientific_backend.pycbc_adapter import solve as solve_pycbc_waveform
 from scientific_backend.pycbc_adapter import status as pycbc_status
@@ -667,7 +668,7 @@ def solve(model: str, values: dict[str, Any]) -> dict[str, Any]:
     return with_science_fallback(scientific_cornell_potential, solve_confinement, values)
 
 
-class LabHandler(SimpleHTTPRequestHandler):
+class LabHandler(SecureLocalMixin, SimpleHTTPRequestHandler):
     server_version = "QCDMatterLab/0.1"
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -678,6 +679,8 @@ class LabHandler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def do_GET(self) -> None:
+        if self.security_get():
+            return
         # The desktop shortcut and earlier versions of the project opened the
         # laboratory directly at http://127.0.0.1:8892/.  Keep that stable
         # public entry point while the current repository stores the lab under
@@ -724,7 +727,7 @@ class LabHandler(SimpleHTTPRequestHandler):
             return
         super().do_GET()
 
-    def do_POST(self) -> None:
+    def handle_post(self) -> None:
         request_path = self.path.split("?", 1)[0]
         if request_path.startswith("/api/discovery-chain/") or request_path.startswith("/matter-lab/api/discovery-chain/"):
             self.handle_discovery_chain(request_path)
@@ -800,7 +803,9 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8892)
     args = parser.parse_args()
-    server = ThreadingHTTPServer((args.host, args.port), LabHandler)
+    if args.host not in {"127.0.0.1", "localhost"}:
+        parser.error("This local laboratory must bind to loopback, not a network interface")
+    server = BoundedHTTPServer((args.host, args.port), LabHandler)
     print(f"QCD Matter Lab: http://{args.host}:{args.port}/")
     try:
         server.serve_forever()

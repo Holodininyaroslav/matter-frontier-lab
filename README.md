@@ -1,5 +1,8 @@
 # Matter Frontier Lab
 
+> **Security update (2026-09-05):** restart/update local installations; replace previously downloaded installers. Read [SECURITY.md](SECURITY.md) for protected APIs, migration instructions and limitations.
+
+
 <p align="center">
   <img src="assets/matter-frontier-lab-avatar.png" alt="Matter Frontier Lab scientific emblem" width="260">
 </p>
