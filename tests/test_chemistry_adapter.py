@@ -3,6 +3,18 @@ import pytest
 from scientific_backend.chemistry_adapter import solve, status
 
 
+@pytest.mark.parametrize('platform,folder,executable', [('nt','Scripts','python.exe'),('posix','bin','python')])
+def test_worker_interpreter_is_portable(tmp_path, platform, folder, executable):
+    import sys
+    from pathlib import Path
+    from scientific_backend.chemistry_adapter import _science_python
+    assert _science_python(tmp_path, platform) == Path(sys.executable)
+    candidate = tmp_path / '.venv-science' / folder / executable
+    candidate.parent.mkdir(parents=True)
+    candidate.touch()
+    assert _science_python(tmp_path, platform) == candidate
+
+
 def test_rdkit_structure_workbench():
     availability = status(force=True)
     assert availability["rdkit"]["available"], availability

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -10,7 +11,14 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 RDKIT_WORKER = Path(__file__).resolve().with_name("rdkit_worker.py")
 PYSCF_WORKER = Path(__file__).resolve().with_name("pyscf_worker.py")
-SCIENCE_PYTHON = ROOT / ".venv-science" / "Scripts" / "python.exe"
+def _science_python(root: Path = ROOT, platform: str = os.name) -> Path:
+    """Prefer the platform's project venv, otherwise the active interpreter."""
+    relative = ("Scripts", "python.exe") if platform == "nt" else ("bin", "python")
+    candidate = root.joinpath(".venv-science", *relative)
+    return candidate if candidate.is_file() else Path(sys.executable)
+
+
+SCIENCE_PYTHON = _science_python()
 WSL_DISTRO = os.environ.get("MFL_CHEMISTRY_WSL_DISTRO", "Ubuntu")
 WSL_PYTHON = os.environ.get("MFL_CHEMISTRY_PYTHON", "/root/.matter-frontier-lab/chem-env/bin/python")
 _STATUS_CACHE: tuple[float, dict[str, Any]] | None = None
